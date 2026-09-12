@@ -17,6 +17,9 @@ import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * First-person feel: the charging hand pulls up and back and trembles while the aim is unsteady,
  * whips forward on release; and a caught projectile is drawn in the main hand in place of whatever
@@ -25,6 +28,14 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = BetterTossMod.MODID, value = Dist.CLIENT)
 public final class FirstPersonAnimator
 {
+    /**
+     * Vanilla renders both hands inside ONE push/pop, main hand first, so a transform applied for
+     * the main hand would still be on the stack when the off hand draws. Every transform applied
+     * to an un-cancelled main-hand render is recorded here and undone when the off hand's event
+     * arrives (or discarded at the next frame if the off hand never renders).
+     */
+    private static final List<Runnable> UNDO = new ArrayList<>();
+
     private FirstPersonAnimator() {}
 
     @SubscribeEvent
@@ -36,6 +47,13 @@ public final class FirstPersonAnimator
         boolean mainHand = event.getHand() == InteractionHand.MAIN_HAND;
         float pt = event.getPartialTick();
 
+        if (mainHand) {
+            UNDO.clear();
+        } else if (!UNDO.isEmpty()) {
+            for (int i = UNDO.size() - 1; i >= 0; i--) UNDO.get(i).run();
+            UNDO.clear();
+        }
+
         if (mainHand && ClientCatchState.localHolding()) {
             ItemStack display = ClientCatchState.display(player);
             if (!display.isEmpty()) {
@@ -45,7 +63,19 @@ public final class FirstPersonAnimator
             }
         }
         if (!BTConfig.CLIENT.firstPersonAnimations.get()) return;
-        applyThrowAnim(event.getPoseStack(), player, mainHand, pt);
+        applyThrowAnim(event.getPoseStack(), player, mainHand, pt, mainHand);
+    }
+
+    private static void translate(PoseStack pose, double x, double y, double z, boolean record)
+    {
+        pose.translate(x, y, z);
+        if (record) UNDO.add(() -> pose.translate(-x, -y, -z));
+    }
+
+    private static void rotate(PoseStack pose, Axis axis, float degrees, boolean record)
+    {
+        pose.mulPose(axis.rotationDegrees(degrees));
+        if (record) UNDO.add(() -> pose.mulPose(axis.rotationDegrees(-degrees)));
     }
 
     /** Vanilla's ordinary held-item arm transform, then the item of the caught projectile. */
@@ -72,7 +102,7 @@ public final class FirstPersonAnimator
         pose.mulPose(Axis.XP.rotationDegrees(f1 * -80.0F));
         pose.mulPose(Axis.YP.rotationDegrees(i * -45.0F));
         if (BTConfig.CLIENT.firstPersonAnimations.get()) {
-            applyThrowAnim(pose, player, true, event.getPartialTick());
+            applyThrowAnim(pose, player, true, event.getPartialTick(), false);
         }
         mc.getEntityRenderDispatcher().getItemInHandRenderer().renderItem(player, display,
                 right ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
@@ -80,8 +110,11 @@ public final class FirstPersonAnimator
         pose.popPose();
     }
 
-    /** Wind-up (with tremble) while charging with this hand, and the forward whip after a release. */
-    private static void applyThrowAnim(PoseStack pose, LocalPlayer player, boolean mainHand, float pt)
+    /**
+     * Wind-up (with tremble) while charging with this hand, and the forward whip after a release.
+     * With record set, every transform is remembered so it can be undone before the off hand draws.
+     */
+    private static void applyThrowAnim(PoseStack pose, LocalPlayer player, boolean mainHand, float pt, boolean record)
     {
         HumanoidArm arm = mainHand ? player.getMainArm() : player.getMainArm().getOpposite();
         float side = arm == HumanoidArm.RIGHT ? 1.0F : -1.0F;
@@ -90,9 +123,9 @@ public final class FirstPersonAnimator
         float whip = ClientThrowing.throwWhip(pt, mainHand);
         if (whip > 0.0F) {
             float arc = Mth.sin(whip * (float) Math.PI);
-            pose.translate(0.0D, -0.06D * arc, -0.2D * arc);
-            pose.mulPose(Axis.XP.rotationDegrees(38.0F * arc));
-            pose.mulPose(Axis.ZP.rotationDegrees(side * -8.0F * arc));
+            translate(pose, 0.0D, -0.06D * arc, -0.2D * arc, record);
+            rotate(pose, Axis.XP, 38.0F * arc, record);
+            rotate(pose, Axis.ZP, side * -8.0F * arc, record);
         }
 
         if (ClientThrowing.isCharging() && (ClientThrowing.hand() == InteractionHand.MAIN_HAND) == mainHand) {
@@ -101,10 +134,10 @@ public final class FirstPersonAnimator
             float shake = BTConfig.CLIENT.handShake.get() ? (1.0F - focus) * 2.4F : 0.0F;
             float tx = Mth.sin(t * 2.3F) * shake + Mth.sin(t * 3.9F + 1.3F) * shake * 0.5F;
             float tz = Mth.sin(t * 2.9F + 0.7F) * shake * 0.7F;
-            pose.translate(side * -0.12D * c, 0.22D * c, 0.16D * c);
-            pose.mulPose(Axis.XP.rotationDegrees(-42.0F * c + tx * c));
-            pose.mulPose(Axis.ZP.rotationDegrees(side * -12.0F * c + tz * c));
-            pose.mulPose(Axis.YP.rotationDegrees(side * 8.0F * c));
+            translate(pose, side * -0.12D * c, 0.22D * c, 0.16D * c, record);
+            rotate(pose, Axis.XP, -42.0F * c + tx * c, record);
+            rotate(pose, Axis.ZP, side * -12.0F * c + tz * c, record);
+            rotate(pose, Axis.YP, side * 8.0F * c, record);
         }
     }
 }
