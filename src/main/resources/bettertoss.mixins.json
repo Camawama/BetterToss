@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.camacraft.bettertoss.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "bettertoss.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+    "ItemInHandLayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

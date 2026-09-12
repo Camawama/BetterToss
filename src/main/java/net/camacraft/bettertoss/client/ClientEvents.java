@@ -1,0 +1,216 @@
+package net.camacraft.bettertoss.client;
+
+import net.camacraft.bettertoss.BTConfig;
+import net.camacraft.bettertoss.BetterTossMod;
+import net.camacraft.bettertoss.ThrowMode;
+import net.camacraft.bettertoss.Throwables;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.HitResult;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.ComputeFovModifierEvent;
+import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.client.event.ViewportEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import org.lwjgl.glfw.GLFW;
+
+@Mod.EventBusSubscriber(modid = BetterTossMod.MODID, value = Dist.CLIENT)
+public final class ClientEvents
+{
+    private ClientEvents() {}
+
+    private static boolean modActive(Minecraft mc)
+    {
+        return mc.player != null && mc.level != null && BTConfig.serverLoaded() && BTConfig.SERVER.enabled.get();
+    }
+
+    private static boolean locked()
+    {
+        return ClientCatchState.localHolding() && BTConfig.SERVER.catchEnabled.get()
+                && BTConfig.SERVER.lockInputWhileHolding.get();
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        if (event.phase == TickEvent.Phase.START) {
+            // Vanilla polls the drop key's clicks later this same tick; taking them here first is
+            // what turns "tap = drop, hold = fling" into a decision we get to make.
+            if (modActive(mc) && mc.screen == null && !mc.player.isSpectator()
+                    && (BTConfig.SERVER.dropThrowEnabled.get() || locked())) {
+                while (mc.options.keyDrop.consumeClick()) {
+                    ClientThrowing.onDropKeyPressed(Screen.hasControlDown());
+                }
+            }
+            return;
+        }
+        if (mc.level == null || mc.player == null) {
+            ClientThrowing.reset();
+            ClientCatchState.clear();
+            return;
+        }
+        ClientCatchState.tick(mc);
+        ClientThrowing.clientTick(mc);
+    }
+
+    /**
+     * First interception point: the use key. Holding a caught projectile turns every click into a
+     * (caught) throw charge. Otherwise a right-click with a throwable while aiming at nothing starts
+     * the charge; aiming at a block or entity keeps vanilla behaviour so doors and chests still work.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onClickInput(InputEvent.InteractionKeyMappingTriggered event)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        if (player == null || !modActive(mc)) return;
+
+        if (locked()) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND
+                    && ClientThrowing.canStartCharge() && !ClientThrowing.useHeldLastTick()) {
+                ClientThrowing.beginCharge(ThrowMode.CAUGHT, InteractionHand.MAIN_HAND);
+            }
+            return;
+        }
+        if (!event.isUseItem()) return;
+        if (ClientThrowing.isCharging()) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            return;
+        }
+        if (!BTConfig.SERVER.chargedThrowsEnabled.get()) return;
+        ItemStack stack = player.getItemInHand(event.getHand());
+        if (!Throwables.isThrowable(stack)) return;
+        boolean aimingAtNothing = mc.hitResult == null || mc.hitResult.getType() == HitResult.Type.MISS;
+        if (aimingAtNothing && !player.isHandsBusy() && ClientThrowing.canStartCharge()
+                && !player.getCooldowns().isOnCooldown(stack.getItem()) && !ClientThrowing.useHeldLastTick()) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            ClientThrowing.beginCharge(ThrowMode.ITEM, event.getHand());
+        }
+    }
+
+    /**
+     * Second interception point: item uses that fell through a block interaction (right-clicking
+     * plain stone with a snowball) skip the path above and arrive here instead.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event)
+    {
+        if (!event.getLevel().isClientSide || !(event.getEntity() instanceof LocalPlayer player)) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (!modActive(mc)) return;
+
+        if (locked()) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.PASS);
+            if (event.getHand() == InteractionHand.MAIN_HAND && ClientThrowing.canStartCharge()
+                    && !ClientThrowing.useHeldLastTick()) {
+                ClientThrowing.beginCharge(ThrowMode.CAUGHT, InteractionHand.MAIN_HAND);
+            }
+            return;
+        }
+        ItemStack stack = event.getItemStack();
+        if (!Throwables.isThrowable(stack) || !BTConfig.SERVER.chargedThrowsEnabled.get()) return;
+        if (player.getCooldowns().isOnCooldown(stack.getItem())) return;
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.PASS);
+        if (!ClientThrowing.isCharging() && !player.isHandsBusy() && ClientThrowing.canStartCharge()
+                && !ClientThrowing.useHeldLastTick()) {
+            ClientThrowing.beginCharge(ThrowMode.ITEM, event.getHand());
+        }
+    }
+
+    /** Releases are caught at the input callback, not the tick, so the flick and bar are read at the true instant. */
+    @SubscribeEvent
+    public static void onMouseButton(InputEvent.MouseButton.Pre event)
+    {
+        if (event.getAction() == GLFW.GLFW_RELEASE) ClientThrowing.onMouseButtonReleased(event.getButton());
+    }
+
+    @SubscribeEvent
+    public static void onKey(InputEvent.Key event)
+    {
+        if (event.getAction() == GLFW.GLFW_RELEASE) ClientThrowing.onKeyReleased(event.getKey(), event.getScanCode());
+    }
+
+    @SubscribeEvent
+    public static void onRenderTick(TickEvent.RenderTickEvent event)
+    {
+        if (event.phase != TickEvent.Phase.START) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null) ClientThrowing.sampleRotation(mc);
+    }
+
+    @SubscribeEvent
+    public static void onOverlayRender(RenderGuiOverlayEvent.Pre event)
+    {
+        if (!BTConfig.CLIENT.showBar.get() || !ThrowBarOverlay.shouldShow()) return;
+        if (!event.getOverlay().id().equals(VanillaGuiOverlay.EXPERIENCE_BAR.id())) return;
+        event.setCanceled(true);
+        ThrowBarOverlay.render(event.getGuiGraphics(), event.getWindow(), event.getPartialTick());
+    }
+
+    /** Focusing a throw narrows the view a little; vanilla smooths the transition for us. */
+    @SubscribeEvent
+    public static void onComputeFov(ComputeFovModifierEvent event)
+    {
+        if (!ClientThrowing.isCharging()) return;
+        float focus = ClientThrowing.focus(Minecraft.getInstance().getPartialTick());
+        float multiplier = Mth.lerp(focus, 1.0F, BTConfig.CLIENT.focusFovMultiplier.get().floatValue());
+        event.setNewFovModifier(event.getNewFovModifier() * multiplier);
+    }
+
+    /** The unsteady-aim shake, dying away as focus builds, plus a tiny kick on release. */
+    @SubscribeEvent
+    public static void onCameraSetup(ViewportEvent.ComputeCameraAngles event)
+    {
+        float pt = (float) event.getPartialTick();
+        if (BTConfig.CLIENT.cameraShake.get() && ClientThrowing.isCharging()) {
+            float amp = BTConfig.CLIENT.cameraShakeDegrees.get().floatValue() * (1.0F - ClientThrowing.focus(pt));
+            if (amp > 0.001F) {
+                double t = ClientThrowing.chargeTicks() + pt;
+                event.setPitch(event.getPitch() + (float) (Math.sin(t * 2.3D) * 0.6D + Math.sin(t * 3.7D + 0.8D) * 0.4D) * amp);
+                event.setYaw(event.getYaw() + (float) (Math.sin(t * 1.9D + 0.3D) * 0.5D + Math.sin(t * 4.1D + 1.7D) * 0.3D) * amp);
+                event.setRoll(event.getRoll() + (float) Math.sin(t * 2.7D + 1.1D) * amp * 0.35F);
+            }
+        }
+        if (BTConfig.CLIENT.throwKick.get()) {
+            float whip = Math.max(ClientThrowing.throwWhip(pt, true), ClientThrowing.throwWhip(pt, false));
+            if (whip > 0.0F) {
+                event.setPitch(event.getPitch() - 1.2F * Mth.sin(whip * (float) Math.PI));
+            }
+        }
+    }
+
+    /** Third-person poses: swap in the wind-up / throw / holding arm pose before the model is set up. */
+    @SubscribeEvent
+    public static void onRenderPlayerPre(RenderPlayerEvent.Pre event)
+    {
+        if (!BTConfig.CLIENT.thirdPersonPoses.get()) return;
+        ThrowPoses.applyTo(event.getEntity(), event.getRenderer().getModel());
+    }
+
+    @SubscribeEvent
+    public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event)
+    {
+        ClientThrowing.reset();
+        ClientCatchState.clear();
+    }
+}
