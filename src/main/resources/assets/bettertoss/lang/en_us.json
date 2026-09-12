@@ -7,6 +7,5 @@
   "bettertoss.hint.drop_stack": "Release to fling the whole stack",
   "bettertoss.hint.drop_stack_heavy": "Release to heave the whole stack — it's heavy",
   "bettertoss.hint.caught_charge": "Release to throw it back",
-  "bettertoss.hint.holding": "Caught! Hold right-click to throw it",
-  "bettertoss.caught_yours": "%s caught your %s!"
+  "bettertoss.hint.holding": "Caught! Hold right-click to throw it"
 }

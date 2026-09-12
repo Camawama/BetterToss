@@ -7,9 +7,9 @@ pearls, XP bottles, splash and lingering potions, tridents, and most modded thro
   bar's slot and the throw's speed follows where the bar is when you let go.
 - **Flicks** - flick the mouse as you release and the throw picks up that motion: flick up to lob
   it high, sideways to curve it. Thresholds and caps are all configurable.
-- **Focus** - a throw starts shaky (camera shake, trembling hand, wide spread) and steadies the
-  longer you hold, with a slight FOV narrowing as you concentrate. Quick throws are wild; patient
-  throws are precise.
+- **Focus** - a throw released instantly has a wide spread; the longer you hold, the more it
+  steadies, with a slight FOV narrowing as you concentrate. Quick throws are wild; patient throws
+  are precise. (Camera and hand shake exist as options but are off by default.)
 - **Throw animations** - a wind-up pose while charging and a whip on release, in first person and
   for everyone watching in third person.
 - **Fling with Q** - tap the drop key to drop an item like vanilla; hold it to charge a fling.
@@ -31,8 +31,8 @@ entity type tags and config lists to tune it.
 
 ## Config
 
-- `config/bettertoss-client.toml` - bar sweep speed and mode, flick sensitivity, shake, FOV,
-  animations, sounds, drop-key hold time.
+- `config/bettertoss-client.toml` - bar sweep speed and mode, optional hints and shake, flick
+  sensitivity, FOV, animations, drop-key hold time.
 - `<world>/serverconfig/bettertoss-server.toml` - power range, flick caps, focus timing and
   spread, fling speeds, catch radius/cone/rules/blacklists, and per-feature switches.
 

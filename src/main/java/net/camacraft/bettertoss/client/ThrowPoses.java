@@ -72,7 +72,7 @@ public final class ThrowPoses
         double held = now - state.chargeStart;
         float blend = (float) ThrowMath.smoothstep(held / 5.0D);
         float focus = (float) ThrowMath.focus(held);
-        float tremble = (1.0F - focus) * 0.07F
+        float tremble = (1.0F - focus) * 0.025F
                 * (Mth.sin((float) now * 2.3F) + 0.5F * Mth.sin((float) now * 3.9F + 1.1F));
         poseWindup(model, arm, blend, tremble);
     }

@@ -78,7 +78,6 @@ public class BTConfig
         public final ForgeConfigSpec.IntValue catchCooldownTicks;
         public final ForgeConfigSpec.DoubleValue rethrowSpeedMultiplier;
         public final ForgeConfigSpec.BooleanValue dropOnDeath;
-        public final ForgeConfigSpec.BooleanValue catchMessages;
         public final ForgeConfigSpec.BooleanValue blockArrows;
         public final ForgeConfigSpec.BooleanValue blockHurtingProjectiles;
         public final ForgeConfigSpec.BooleanValue allowReturningTridents;
@@ -171,8 +170,6 @@ public class BTConfig
                     .defineInRange("rethrowSpeedMultiplier", 1.0D, 0.1D, 5.0D);
             dropOnDeath = b.comment("Drop a held caught projectile in place on death (false keeps it through respawn). Logging out always drops it.")
                     .define("dropOnDeath", true);
-            catchMessages = b.comment("Tell the original thrower on the action bar when their projectile is caught.")
-                    .define("catchMessages", true);
             blockArrows = b.comment("Never catch arrow-type projectiles (arrows, tridents, modded arrows) unless explicitly whitelisted.")
                     .define("blockArrows", true);
             blockHurtingProjectiles = b.comment("Never catch fireball-type projectiles (fireballs, wither skulls, dragon fireballs) unless explicitly whitelisted.")
@@ -214,17 +211,16 @@ public class BTConfig
 
         public final ForgeConfigSpec.BooleanValue firstPersonAnimations;
         public final ForgeConfigSpec.BooleanValue thirdPersonPoses;
-        public final ForgeConfigSpec.BooleanValue chargeSounds;
 
         Client(ForgeConfigSpec.Builder b)
         {
             b.push("bar");
             showBar = b.comment("Show the charge bar in the experience bar's slot while charging or holding a caught projectile.")
                     .define("showBar", true);
-            showHints = b.comment("Show the one-line hint above the hotbar while charging.")
-                    .define("showHints", true);
-            barShake = b.comment("The bar itself jitters while your aim is unsteady and settles as you focus.")
-                    .define("barShake", true);
+            showHints = b.comment("Show a one-line hint above the hotbar while charging or holding a caught projectile. Off by default: the bar says enough.")
+                    .define("showHints", false);
+            barShake = b.comment("Jitter the bar while your aim is unsteady, settling as you focus.")
+                    .define("barShake", false);
             chargeSweepTicks = b.comment("Ticks for the power bar to sweep from empty to full.")
                     .defineInRange("chargeSweepTicks", 30, 5, 200);
             chargeMode = b.comment("OSCILLATE: the bar sweeps up and back down repeatedly, so power is about timing the release. RAMP: the bar fills once and stays full.")
@@ -250,14 +246,14 @@ public class BTConfig
             b.push("focus");
             focusFovMultiplier = b.comment("FOV multiplier once a throw is fully steadied (lower = more zoom).")
                     .defineInRange("focusFovMultiplier", 0.9D, 0.5D, 1.0D);
-            cameraShake = b.comment("Shake the view slightly while a throw is unsteady.")
-                    .define("cameraShake", true);
-            cameraShakeDegrees = b.comment("Peak camera shake (degrees) at the very start of a charge.")
-                    .defineInRange("cameraShakeDegrees", 0.6D, 0.0D, 5.0D);
-            handShake = b.comment("Tremble the first-person hand while a throw is unsteady.")
-                    .define("handShake", true);
-            throwKick = b.comment("A tiny camera kick as the throw releases.")
-                    .define("throwKick", true);
+            cameraShake = b.comment("Shake the view while a throw is unsteady. Off by default; focus is shown by the FOV alone.")
+                    .define("cameraShake", false);
+            cameraShakeDegrees = b.comment("Peak camera shake (degrees) at the very start of a charge, if cameraShake is on.")
+                    .defineInRange("cameraShakeDegrees", 0.3D, 0.0D, 5.0D);
+            handShake = b.comment("Tremble the first-person hand while a throw is unsteady. Off by default.")
+                    .define("handShake", false);
+            throwKick = b.comment("A tiny camera kick as the throw releases. Off by default.")
+                    .define("throwKick", false);
             b.pop();
 
             b.push("animation");
@@ -265,8 +261,6 @@ public class BTConfig
                     .define("firstPersonAnimations", true);
             thirdPersonPoses = b.comment("Third-person wind-up, throw and holding poses, visible to everyone.")
                     .define("thirdPersonPoses", true);
-            chargeSounds = b.comment("Soft cue sounds when a charge starts and when the aim fully steadies.")
-                    .define("chargeSounds", true);
             b.pop();
         }
     }

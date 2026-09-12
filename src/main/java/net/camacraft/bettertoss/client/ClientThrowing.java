@@ -13,8 +13,6 @@ import net.camacraft.bettertoss.network.ThrowMessage;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 
@@ -36,7 +34,6 @@ public final class ClientThrowing
     private static int chargeTicks;
     private static int cooldown;
     private static boolean fullStack;
-    private static boolean focusCued;
 
     private static int throwAnimTicks;
     private static boolean throwAnimOffHand;
@@ -127,13 +124,9 @@ public final class ClientThrowing
         mode = newMode;
         hand = newHand;
         chargeTicks = 0;
-        focusCued = false;
         fullStack = newMode == ThrowMode.DROP && dropCtrl;
         BTNet.sendToServer(new ChargeStartMessage(newMode, newHand));
         ClientCatchState.setCharging(player.getId(), newHand == InteractionHand.OFF_HAND);
-        if (BTConfig.CLIENT.chargeSounds.get()) {
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.ARMOR_EQUIP_LEATHER, 1.4F, 0.35F));
-        }
     }
 
     public static void cancelCharge(boolean notifyServer)
@@ -278,12 +271,6 @@ public final class ClientThrowing
                 release(0.0F); // the release event was missed (focus loss etc.): release now
             } else {
                 chargeTicks++;
-                if (!focusCued && focus(0.0F) >= 0.999F) {
-                    focusCued = true;
-                    if (BTConfig.CLIENT.chargeSounds.get()) {
-                        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.7F, 0.18F));
-                    }
-                }
             }
         }
 
@@ -319,7 +306,6 @@ public final class ClientThrowing
         dropHeldTicks = 0;
         useHeldLastTick = false;
         catchIntent = false;
-        focusCued = false;
         FLICK.clear();
     }
 }

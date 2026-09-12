@@ -7,7 +7,6 @@ import net.camacraft.bettertoss.network.BTNet;
 import net.camacraft.bettertoss.network.CaughtSyncMessage;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -175,7 +174,6 @@ public final class CatchManager
         ItemStack display = Catchables.displayFor(projectile, nbt);
         double baseSpeed = Catchables.baseSpeed(projectile);
         Held held = new Held(nbt, display, baseSpeed, now(player));
-        Entity owner = projectile.getOwner();
         Vec3 where = projectile.position();
         projectile.discard();
 
@@ -183,14 +181,10 @@ public final class CatchManager
         persist(player, held);
         ServerThrowManager.cancelCharge(player, true);
 
+        // A catch is a physical thing: one soft rustle at the hands and a small puff, nothing more.
         ServerLevel level = player.serverLevel();
-        level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.7F, 0.55F);
-        level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ARMOR_EQUIP_LEATHER, SoundSource.PLAYERS, 0.8F, 1.3F);
-        level.sendParticles(ParticleTypes.POOF, where.x, where.y, where.z, 4, 0.12D, 0.12D, 0.12D, 0.02D);
-        if (BTConfig.SERVER.catchMessages.get() && owner instanceof ServerPlayer thrower && thrower != player) {
-            Component what = display.isEmpty() ? projectile.getType().getDescription() : display.getHoverName();
-            thrower.displayClientMessage(Component.translatable("bettertoss.caught_yours", player.getDisplayName(), what), true);
-        }
+        level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ARMOR_EQUIP_LEATHER, SoundSource.PLAYERS, 0.5F, 1.1F);
+        level.sendParticles(ParticleTypes.POOF, where.x, where.y, where.z, 3, 0.1D, 0.1D, 0.1D, 0.01D);
         sync(player);
         return true;
     }
