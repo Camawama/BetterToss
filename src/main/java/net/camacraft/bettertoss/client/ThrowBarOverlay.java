@@ -2,6 +2,7 @@ package net.camacraft.bettertoss.client;
 
 import com.mojang.blaze3d.platform.Window;
 import net.camacraft.bettertoss.BTConfig;
+import net.camacraft.bettertoss.ThrowMath;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -38,10 +39,16 @@ public final class ThrowBarOverlay
             }
             int color;
             String hint;
+            float reach = 1.0F; // how much of the bar a heavy stack can actually use
             switch (ClientThrowing.mode()) {
                 case DROP -> {
                     color = 0xFF7EE044;
-                    hint = ClientThrowing.isFullStack() ? "bettertoss.hint.drop_stack" : "bettertoss.hint.drop";
+                    Minecraft mc = Minecraft.getInstance();
+                    int count = ClientThrowing.isFullStack() && mc.player != null
+                            ? mc.player.getInventory().getSelected().getCount() : 1;
+                    reach = (float) ThrowMath.stackWeightMultiplier(count);
+                    hint = !ClientThrowing.isFullStack() ? "bettertoss.hint.drop"
+                            : reach < 0.7F ? "bettertoss.hint.drop_stack_heavy" : "bettertoss.hint.drop_stack";
                 }
                 case CAUGHT -> {
                     color = 0xFFB47CF0;
@@ -54,7 +61,13 @@ public final class ThrowBarOverlay
             }
             color = lerpColor(focus, color, brighten(color, 0.3F));
             drawBackground(graphics, x, y);
-            drawFill(graphics, x, y, value, color);
+            if (reach < 1.0F) {
+                // A heavy stack can't use the whole bar: shade the unreachable part and cap the fill.
+                int capX = x + Math.round(reach * 182.0F);
+                graphics.fill(capX, y, x + 182, y + 5, 0x60000000);
+                graphics.fill(capX, y, capX + 1, y + 5, darken(color, 0.2F));
+            }
+            drawFill(graphics, x, y, value * reach, color);
             drawHint(graphics, window, hint, brighten(color, 0.2F), false);
         } else if (ClientCatchState.localHolding()) {
             drawBackground(graphics, x, y);

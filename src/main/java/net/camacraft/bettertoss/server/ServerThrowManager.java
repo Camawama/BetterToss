@@ -250,7 +250,9 @@ public final class ServerThrowManager
         player.containerMenu.findSlot(inv, inv.selected)
                 .ifPresent(slot -> player.containerMenu.setRemoteSlot(slot, inv.getSelected()));
 
-        double speed = Mth.lerp(power, cfg.dropThrowMinSpeed.get(), cfg.dropThrowMaxSpeed.get()) * flickBonus;
+        // A whole stack is heavy: the more items actually leave the hand, the shorter the fling.
+        double speed = Mth.lerp(power, cfg.dropThrowMinSpeed.get(), cfg.dropThrowMaxSpeed.get()) * flickBonus
+                * ThrowMath.stackWeightMultiplier(removed.getCount());
         s.pending = new PendingThrow(dir, 1.0D, speed, false);
         s.applied = false;
         s.dispatching = true;

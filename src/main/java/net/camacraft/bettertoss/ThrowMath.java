@@ -75,4 +75,18 @@ public final class ThrowMath
         return Mth.lerp(Mth.clamp(power, 0.0F, 1.0F),
                 BTConfig.SERVER.minPowerMultiplier.get(), BTConfig.SERVER.maxPowerMultiplier.get());
     }
+
+    /**
+     * Speed multiplier for flinging a stack of the given count: a single item flies at full speed, a
+     * stack at the reference count (64 by default) at the configured fraction, in between on a curve.
+     */
+    public static double stackWeightMultiplier(int count)
+    {
+        BTConfig.Server cfg = BTConfig.SERVER;
+        if (!cfg.stackWeightEnabled.get() || count <= 1) return 1.0D;
+        int reference = Math.max(2, cfg.stackWeightReference.get());
+        double heft = Mth.clamp((count - 1) / (double) (reference - 1), 0.0D, 1.0D);
+        heft = Math.pow(heft, cfg.stackWeightCurve.get());
+        return Mth.lerp(heft, 1.0D, cfg.fullStackSpeedMultiplier.get());
+    }
 }

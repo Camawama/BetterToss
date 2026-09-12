@@ -13,6 +13,8 @@ pearls, XP bottles, splash and lingering potions, tridents, and most modded thro
 - **Throw animations** - a wind-up pose while charging and a whip on release, in first person and
   for everyone watching in third person.
 - **Fling with Q** - tap the drop key to drop an item like vanilla; hold it to charge a fling.
+  Stacks are heavy: heaving a whole stack (Ctrl+Q) travels much less far than flinging one item,
+  and the bar shows how much reach the weight leaves you.
 - **Catching** - hold the catch key (right-click by default) as a projectile comes at you and you
   catch it: an egg caught doesn't crack, an ender pearl caught never teleports its thrower. The
   projectile stays a projectile, sits in your hand, and you must throw it before you can do

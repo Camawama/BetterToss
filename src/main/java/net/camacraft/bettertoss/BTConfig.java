@@ -63,6 +63,10 @@ public class BTConfig
         public final ForgeConfigSpec.BooleanValue dropThrowEnabled;
         public final ForgeConfigSpec.DoubleValue dropThrowMinSpeed;
         public final ForgeConfigSpec.DoubleValue dropThrowMaxSpeed;
+        public final ForgeConfigSpec.BooleanValue stackWeightEnabled;
+        public final ForgeConfigSpec.IntValue stackWeightReference;
+        public final ForgeConfigSpec.DoubleValue fullStackSpeedMultiplier;
+        public final ForgeConfigSpec.DoubleValue stackWeightCurve;
 
         public final ForgeConfigSpec.BooleanValue catchEnabled;
         public final ForgeConfigSpec.DoubleValue catchRadius;
@@ -136,6 +140,14 @@ public class BTConfig
                     .defineInRange("minSpeed", 0.35D, 0.05D, 5.0D);
             dropThrowMaxSpeed = b.comment("Fling speed (blocks/tick) at a full bar.")
                     .defineInRange("maxSpeed", 1.3D, 0.05D, 5.0D);
+            stackWeightEnabled = b.comment("Bigger stacks are heavier: flinging a whole stack (Ctrl+Q) travels less far than flinging a single item.")
+                    .define("stackWeight", true);
+            stackWeightReference = b.comment("The stack count that is treated as \"fully heavy\". Counts above it are all equally heavy; a single item is never penalised.")
+                    .defineInRange("stackWeightReference", 64, 2, 64);
+            fullStackSpeedMultiplier = b.comment("Speed multiplier for a fully heavy stack (1 = no penalty). Everything between one item and the reference count is interpolated.")
+                    .defineInRange("fullStackSpeedMultiplier", 0.35D, 0.05D, 1.0D);
+            stackWeightCurve = b.comment("Shape of the penalty between one item and a full stack. 1 = linear; below 1 small stacks already feel heavy; above 1 only big stacks do.")
+                    .defineInRange("stackWeightCurve", 1.0D, 0.25D, 4.0D);
             b.pop();
 
             b.push("catch");
