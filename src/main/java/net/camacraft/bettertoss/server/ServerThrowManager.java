@@ -246,9 +246,9 @@ public final class ServerThrowManager
                 && (fullStack || selected.getCount() == 1)) {
             player.stopUsingItem();
         }
+        // Unlike a vanilla drop, the client did not remove the item itself, so the container's
+        // normal change broadcast must be left to send the new slot contents.
         ItemStack removed = inv.removeFromSelected(fullStack);
-        player.containerMenu.findSlot(inv, inv.selected)
-                .ifPresent(slot -> player.containerMenu.setRemoteSlot(slot, inv.getSelected()));
 
         // A whole stack is heavy: the more items actually leave the hand, the shorter the fling.
         double speed = Mth.lerp(power, cfg.dropThrowMinSpeed.get(), cfg.dropThrowMaxSpeed.get()) * flickBonus

@@ -141,12 +141,17 @@ public final class CatchManager
         if (!projectile.isAlive() || projectile.isRemoved()) return false;
         if (!Catchables.isCatchable(projectile)) return false;
         Entity owner = projectile.getOwner();
-        if (owner == player && !BTConfig.SERVER.allowSelfCatch.get()) return false;
         if (projectile instanceof AbstractArrow arrow && arrow.isNoPhysics() && !BTConfig.SERVER.allowReturningTridents.get()) return false;
         Vec3 velocity = projectile.getDeltaMovement();
         if (velocity.lengthSqr() < 0.0025D) return false; // resting, not in flight
         Vec3 to = projectile.position().subtract(eye);
         double dist = to.length();
+        if (owner == player) {
+            if (!BTConfig.SERVER.allowSelfCatch.get()) return false;
+            // Your own throw only counts once it has genuinely left your hand and is coming back;
+            // otherwise holding the button while throwing would snatch it straight back.
+            if (projectile.tickCount < 10 || velocity.dot(to.scale(-1.0D)) <= 0.0D) return false;
+        }
         if (!impact && dist > radius) return false;
         if (dist > 0.3D) {
             double cos = to.normalize().dot(player.getViewVector(1.0F));

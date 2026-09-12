@@ -120,24 +120,28 @@ public final class FirstPersonAnimator
         float side = arm == HumanoidArm.RIGHT ? 1.0F : -1.0F;
         float t = player.tickCount + pt;
 
+        // These run BEFORE vanilla places the hand at (0.56, -0.52, -0.72), so a rotation here
+        // orbits the whole hand around the camera: positive X lifts it up the screen (and slightly
+        // away), negative X drops it down and closer. Keep angles moderate or the hand leaves view.
         float whip = ClientThrowing.throwWhip(pt, mainHand);
         if (whip > 0.0F) {
             float arc = Mth.sin(whip * (float) Math.PI);
-            translate(pose, 0.0D, -0.06D * arc, -0.2D * arc, record);
-            rotate(pose, Axis.XP, 38.0F * arc, record);
-            rotate(pose, Axis.ZP, side * -8.0F * arc, record);
+            translate(pose, 0.0D, -0.02D * arc, -0.18D * arc, record);
+            rotate(pose, Axis.XP, -22.0F * arc, record);
+            rotate(pose, Axis.ZP, side * -6.0F * arc, record);
         }
 
         if (ClientThrowing.isCharging() && (ClientThrowing.hand() == InteractionHand.MAIN_HAND) == mainHand) {
             float c = (float) ThrowMath.smoothstep((ClientThrowing.chargeTicks() + pt) / 5.0D);
             float focus = ClientThrowing.focus(pt);
-            float shake = BTConfig.CLIENT.handShake.get() ? (1.0F - focus) * 2.4F : 0.0F;
+            float shake = BTConfig.CLIENT.handShake.get() ? (1.0F - focus) * 2.0F : 0.0F;
             float tx = Mth.sin(t * 2.3F) * shake + Mth.sin(t * 3.9F + 1.3F) * shake * 0.5F;
             float tz = Mth.sin(t * 2.9F + 0.7F) * shake * 0.7F;
-            translate(pose, side * -0.12D * c, 0.22D * c, 0.16D * c, record);
-            rotate(pose, Axis.XP, -42.0F * c + tx * c, record);
-            rotate(pose, Axis.ZP, side * -12.0F * c + tz * c, record);
-            rotate(pose, Axis.YP, side * 8.0F * c, record);
+            // Cocked: lifted up the screen, pulled in toward the centre and a touch further away.
+            translate(pose, side * -0.10D * c, 0.02D * c, -0.08D * c, record);
+            rotate(pose, Axis.XP, 34.0F * c + tx * c, record);
+            rotate(pose, Axis.ZP, side * -8.0F * c + tz * c, record);
+            rotate(pose, Axis.YP, side * -10.0F * c, record);
         }
     }
 }
