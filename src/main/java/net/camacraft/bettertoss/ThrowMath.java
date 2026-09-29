@@ -1,5 +1,6 @@
 package net.camacraft.bettertoss;
 
+import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
@@ -46,19 +47,13 @@ public final class ThrowMath
         return direction(yaw, pitch);
     }
 
-    public static double smoothstep(double t)
-    {
-        t = Mth.clamp(t, 0.0D, 1.0D);
-        return t * t * (3.0D - 2.0D * t);
-    }
-
     /** 0 = just pressed, 1 = fully steadied, as a function of how long the button has been held. */
     public static double focus(double holdTicks)
     {
         if (!BTConfig.SERVER.focusEnabled.get()) return 1.0D;
         int need = BTConfig.SERVER.focusTicks.get();
         if (need <= 0) return 1.0D;
-        return smoothstep(holdTicks / need);
+        return Easing.smoothstep(holdTicks / need);
     }
 
     /** Random spread in degrees for a given focus level. */

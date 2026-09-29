@@ -2,8 +2,8 @@ package net.camacraft.bettertoss.network;
 
 import net.camacraft.bettertoss.ThrowMode;
 import net.camacraft.bettertoss.server.ServerThrowManager;
+import net.camacraft.camafy.network.Packets;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -74,12 +74,6 @@ public class ThrowMessage
 
     public static void handle(ThrowMessage msg, Supplier<NetworkEvent.Context> ctx)
     {
-        ctx.get().enqueueWork(() -> {
-            ServerPlayer sender = ctx.get().getSender();
-            if (sender != null) {
-                ServerThrowManager.onThrow(sender, msg);
-            }
-        });
-        ctx.get().setPacketHandled(true);
+        Packets.handleServer(ctx, sender -> ServerThrowManager.onThrow(sender, msg));
     }
 }

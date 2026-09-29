@@ -8,7 +8,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
-/** Client mod-bus setup: keybinds, the custom arm poses, and the client-side "is holding" hook. */
+/** Client mod-bus setup: keybinds, the custom arm poses, the client-side "is holding" hook, and the bar's XP-bar slot. */
 @Mod.EventBusSubscriber(modid = BetterTossMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ClientModEvents
 {
@@ -27,5 +27,6 @@ public final class ClientModEvents
             ThrowPoses.init();
             CatchManager.clientHoldingCheck = ClientCatchState::isHolding;
         });
+        ThrowBarOverlay.register();
     }
 }

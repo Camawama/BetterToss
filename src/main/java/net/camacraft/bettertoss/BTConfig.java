@@ -1,6 +1,8 @@
 package net.camacraft.bettertoss;
 
+import net.camacraft.camafy.config.ConfigMigrator;
 import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.eventbus.api.IEventBus;
 
 import java.util.List;
 
@@ -31,6 +33,26 @@ public class BTConfig
     public static boolean serverLoaded()
     {
         return SERVER_SPEC.isLoaded();
+    }
+
+    /**
+     * Forge keeps whatever a key held when the file was first written, so a retuned default never
+     * reaches an existing file. Camafy's migrator moves client values still sitting on an old
+     * default to the new one; a value the player changed never matches, so it is left alone.
+     */
+    public static void registerMigrations(IEventBus modBus)
+    {
+        ConfigMigrator.register(modBus, CLIENT_SPEC, CLIENT.configVersion, Client.CURRENT_CONFIG_VERSION, from -> {
+            if (from < 1) {
+                // The hints and every shake went off by default after the first files were written.
+                ConfigMigrator.move(CLIENT.showHints, true, false);
+                ConfigMigrator.move(CLIENT.barShake, true, false);
+                ConfigMigrator.move(CLIENT.cameraShake, true, false);
+                ConfigMigrator.move(CLIENT.cameraShakeDegrees, 0.6D, 0.3D);
+                ConfigMigrator.move(CLIENT.handShake, true, false);
+                ConfigMigrator.move(CLIENT.throwKick, true, false);
+            }
+        });
     }
 
     private static boolean isString(Object o)
@@ -94,13 +116,13 @@ public class BTConfig
             b.pop();
 
             b.push("throwing");
-            chargedThrowsEnabled = b.comment("Hold right-click with a throwable to charge the throw; a quick tap is a weak toss.")
+            chargedThrowsEnabled = b.comment("Hold right-click with a throwable to charge the throw. A quick click still throws it straight away as a weak, uncharged throw (the empty-bar power and widest spread), so eggs and snowballs can be spammed; the client's useHoldTicks sets how long counts as a hold.")
                     .define("chargedThrowsEnabled", true);
-            minPowerMultiplier = b.comment("Velocity multiplier (relative to the vanilla throw) at an empty bar - what a quick tap throws with.")
+            minPowerMultiplier = b.comment("Velocity multiplier (relative to the vanilla throw) at an empty bar - what a quick click that never became a charge throws with.")
                     .defineInRange("minPowerMultiplier", 0.35D, 0.05D, 2.0D);
             maxPowerMultiplier = b.comment("Velocity multiplier at a full bar.")
                     .defineInRange("maxPowerMultiplier", 1.6D, 0.1D, 6.0D);
-            throwCooldownTicks = b.comment("Ticks after any throw before another charge can start.")
+            throwCooldownTicks = b.comment("Ticks after a charged throw before another charge can start. Quick clicks are never held back by it.")
                     .defineInRange("throwCooldownTicks", 4, 0, 100);
             inheritShooterMotion = b.comment("Add the thrower's own velocity to the projectile, like vanilla does.")
                     .define("inheritShooterMotion", true);
@@ -190,12 +212,17 @@ public class BTConfig
 
     public static class Client
     {
+        /** Bumped when a shipped client default changes; registerMigrations() upgrades older files. */
+        public static final int CURRENT_CONFIG_VERSION = 1;
+        public final ForgeConfigSpec.IntValue configVersion;
+
         public final ForgeConfigSpec.BooleanValue showBar;
         public final ForgeConfigSpec.BooleanValue showHints;
         public final ForgeConfigSpec.BooleanValue barShake;
         public final ForgeConfigSpec.IntValue chargeSweepTicks;
         public final ForgeConfigSpec.EnumValue<ChargeMode> chargeMode;
 
+        public final ForgeConfigSpec.IntValue useHoldTicks;
         public final ForgeConfigSpec.IntValue dropHoldTicks;
 
         public final ForgeConfigSpec.IntValue flickWindowMs;
@@ -214,12 +241,19 @@ public class BTConfig
 
         Client(ForgeConfigSpec.Builder b)
         {
+            b.push("meta");
+            // Default 0 on purpose: a file written before this key existed gains it at 0, which marks
+            // it as never migrated. A fresh file migrates as a no-op and is stamped current.
+            configVersion = b.comment("Internal: which generation of shipped defaults this file has seen. Settings you never changed follow the mod's new defaults; settings you changed are left alone. Do not edit.")
+                    .defineInRange("configVersion", 0, 0, Integer.MAX_VALUE);
+            b.pop();
+
             b.push("bar");
             showBar = b.comment("Show the charge bar in the experience bar's slot while charging or holding a caught projectile.")
                     .define("showBar", true);
-            showHints = b.comment("Show a one-line hint above the hotbar while charging or holding a caught projectile. Off by default: the bar says enough.")
+            showHints = b.comment("Show a one-line tip above the hotbar while charging or holding a caught projectile. Off by default: the bar says enough.")
                     .define("showHints", false);
-            barShake = b.comment("Jitter the bar while your aim is unsteady, settling as you focus.")
+            barShake = b.comment("Sway the bar gently while your aim is unsteady, settling as you focus. Off by default.")
                     .define("barShake", false);
             chargeSweepTicks = b.comment("Ticks for the power bar to sweep from empty to full.")
                     .defineInRange("chargeSweepTicks", 30, 5, 200);
@@ -228,6 +262,8 @@ public class BTConfig
             b.pop();
 
             b.push("controls");
+            useHoldTicks = b.comment("Ticks right-click must be held with a throwable before it starts charging. Releasing sooner throws it straight away as a weak, uncharged throw, so eggs and snowballs can still be spammed. Tridents charge from the first tick, as vanilla already makes them a hold.")
+                    .defineInRange("useHoldTicks", 5, 1, 40);
             dropHoldTicks = b.comment("Ticks the drop key must be held before it starts charging a fling instead of dropping. Releasing sooner drops the item like vanilla.")
                     .defineInRange("dropHoldTicks", 5, 1, 40);
             b.pop();
@@ -246,11 +282,11 @@ public class BTConfig
             b.push("focus");
             focusFovMultiplier = b.comment("FOV multiplier once a throw is fully steadied (lower = more zoom).")
                     .defineInRange("focusFovMultiplier", 0.9D, 0.5D, 1.0D);
-            cameraShake = b.comment("Shake the view while a throw is unsteady. Off by default; focus is shown by the FOV alone.")
+            cameraShake = b.comment("Sway the view slowly while a throw is unsteady. Off by default; focus is shown by the FOV alone.")
                     .define("cameraShake", false);
-            cameraShakeDegrees = b.comment("Peak camera shake (degrees) at the very start of a charge, if cameraShake is on.")
+            cameraShakeDegrees = b.comment("Peak camera sway (degrees) at the very start of a charge, if cameraShake is on.")
                     .defineInRange("cameraShakeDegrees", 0.3D, 0.0D, 5.0D);
-            handShake = b.comment("Tremble the first-person hand while a throw is unsteady. Off by default.")
+            handShake = b.comment("Let the throwing hand sway while a throw is unsteady (the first-person hand and the third-person arm). Off by default.")
                     .define("handShake", false);
             throwKick = b.comment("A tiny camera kick as the throw releases. Off by default.")
                     .define("throwKick", false);

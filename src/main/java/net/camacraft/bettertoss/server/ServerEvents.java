@@ -12,6 +12,7 @@ import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
@@ -26,7 +27,8 @@ public final class ServerEvents
     /**
      * The vanilla use-item packet still reaches the server for every right-click the client
      * intercepted; throwables are refused here unless the throw manager itself is dispatching them,
-     * so the only way a throwable ever leaves a hand is through a charged release.
+     * so the only way a throwable ever leaves a hand is through the throw manager: a charged
+     * release, or a quick click it throws as an uncharged one.
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRightClickItem(PlayerInteractEvent.RightClickItem event)
@@ -82,6 +84,14 @@ public final class ServerEvents
             ServerThrowManager.onLogout(player);
             CatchManager.onLogout(player);
         }
+    }
+
+    /** Session maps are static: clear them so a second singleplayer world in the same JVM starts clean. */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event)
+    {
+        ServerThrowManager.onServerStopped();
+        CatchManager.onServerStopped();
     }
 
     @SubscribeEvent

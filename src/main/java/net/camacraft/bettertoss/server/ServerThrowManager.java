@@ -8,6 +8,8 @@ import net.camacraft.bettertoss.Throwables;
 import net.camacraft.bettertoss.network.BTNet;
 import net.camacraft.bettertoss.network.ChargeSyncMessage;
 import net.camacraft.bettertoss.network.ThrowMessage;
+import net.camacraft.camafy.data.PlayerSessions;
+import net.camacraft.camafy.network.NetValidate;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -23,10 +25,7 @@ import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Server side of every throw. The server times how long the button was held (accuracy), validates
@@ -51,20 +50,21 @@ public final class ServerThrowManager
     /** speedMultiplier scales a spawned projectile's own speed; absoluteSpeed > 0 is used for flung item entities instead. */
     record PendingThrow(Vec3 dir, double speedMultiplier, double absoluteSpeed, boolean inheritMotion) {}
 
-    private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+    /** Dropped when the player logs out and when the server stops. */
+    private static final PlayerSessions<Session> SESSIONS = PlayerSessions.create(id -> new Session());
     private static final List<ServerPlayer> DISPATCHING = new ArrayList<>();
 
     private ServerThrowManager() {}
 
     private static Session session(ServerPlayer player)
     {
-        return SESSIONS.computeIfAbsent(player.getUUID(), k -> new Session());
+        return SESSIONS.get(player);
     }
 
     @Nullable
     public static Session chargeState(ServerPlayer player)
     {
-        return SESSIONS.get(player.getUUID());
+        return SESSIONS.peek(player);
     }
 
     /** True while this player's throw is running the item's use() - our own RightClickItem gate lets it through. */
@@ -117,7 +117,7 @@ public final class ServerThrowManager
     /** Ends a charge without a throw; broadcast tells trackers to drop the wind-up pose. */
     public static void cancelCharge(ServerPlayer player, boolean broadcast)
     {
-        Session s = SESSIONS.get(player.getUUID());
+        Session s = SESSIONS.peek(player);
         if (s == null || !s.charging) return;
         s.charging = false;
         if (broadcast) {
@@ -129,17 +129,23 @@ public final class ServerThrowManager
     /** A player just started tracking another: show them the charge in progress, if any. */
     public static void syncTo(ServerPlayer viewer, ServerPlayer target)
     {
-        Session s = SESSIONS.get(target.getUUID());
+        Session s = SESSIONS.peek(target);
         if (s != null && s.charging) {
             BTNet.sendTo(viewer, new ChargeSyncMessage(target.getId(), ChargeSyncMessage.CHARGING,
                     s.hand == InteractionHand.OFF_HAND));
         }
     }
 
+    /** The session itself is dropped by PlayerSessions. */
     public static void onLogout(ServerPlayer player)
     {
-        SESSIONS.remove(player.getUUID());
         DISPATCHING.remove(player);
+    }
+
+    /** The integrated server can stop and a new world start in the same JVM: start that one clean (sessions clear themselves). */
+    public static void onServerStopped()
+    {
+        DISPATCHING.clear();
     }
 
     public static void onThrow(ServerPlayer player, ThrowMessage msg)
@@ -159,8 +165,8 @@ public final class ServerThrowManager
         player.resetLastActionTime();
 
         // Aim: the client's release-frame angles, unless they disagree wildly with what the server knows.
-        float yaw = sane(msg.yaw(), player.getYRot(), 30.0F);
-        float pitch = sane(msg.pitch(), player.getXRot(), 30.0F);
+        float yaw = NetValidate.angle(msg.yaw(), player.getYRot(), 30.0F);
+        float pitch = NetValidate.angle(msg.pitch(), player.getXRot(), 30.0F);
 
         // Flick: clamped server-side, and turned into an angular bend plus a small speed bonus.
         float flickYaw = 0.0F;
@@ -168,8 +174,8 @@ public final class ServerThrowManager
         double flickMagnitude = 0.0D;
         if (cfg.flickEnabled.get()) {
             float max = cfg.maxFlickDegrees.get().floatValue();
-            flickYaw = clampFinite(msg.flickYaw(), max);
-            flickPitch = clampFinite(msg.flickPitch(), max);
+            flickYaw = NetValidate.finiteClamp(msg.flickYaw(), -max, max);
+            flickPitch = NetValidate.finiteClamp(msg.flickPitch(), -max, max);
             flickMagnitude = max > 0.0F ? Math.min(1.0D, Math.hypot(flickYaw, flickPitch) / max) : 0.0D;
         }
 
@@ -180,7 +186,7 @@ public final class ServerThrowManager
                 ThrowMath.direction(yaw + flickYaw, ThrowMath.clampPitch(pitch + flickPitch)),
                 player.getRandom(), spread);
 
-        float power = Float.isFinite(msg.power()) ? Mth.clamp(msg.power(), 0.0F, 1.0F) : 0.0F;
+        float power = NetValidate.finiteClamp(msg.power(), 0.0F, 1.0F);
         double flickBonus = 1.0D + cfg.flickSpeedBonus.get() * flickMagnitude;
         double powerMultiplier = ThrowMath.powerMultiplier(power) * flickBonus;
         boolean inherit = cfg.inheritShooterMotion.get();
@@ -190,6 +196,30 @@ public final class ServerThrowManager
             case DROP -> throwDrop(player, s, dir, power, flickBonus, msg.fullStack());
             case CAUGHT -> CatchManager.throwHeld(player, dir, powerMultiplier, inherit);
         }
+    }
+
+    /**
+     * A quick click that never became a charge: thrown exactly like a charge released the instant it
+     * started - an empty bar (minPowerMultiplier) and the widest focus spread. It still goes through
+     * the item's own use(), so the projectile, sound, stats, item use and item cooldown (ender
+     * pearls) are the item's; only the thrower's charge cooldown is skipped, so clicks can be spammed.
+     */
+    public static void onTapThrow(ServerPlayer player, InteractionHand hand)
+    {
+        BTConfig.Server cfg = BTConfig.SERVER;
+        if (!cfg.enabled.get() || !cfg.chargedThrowsEnabled.get() || player.isSpectator() || !player.isAlive()
+                || HoldLockEvents.locked(player)) return;
+        ItemStack stack = player.getItemInHand(hand);
+        // Hold-to-throw items (tridents) always arrive as charges; a tap for one is not honoured.
+        if (!Throwables.isThrowable(stack) || Throwables.throwsOnRelease(stack)) return;
+        player.resetLastActionTime();
+
+        // The client sent its aim just ahead of this message, as vanilla does before an item use.
+        Vec3 dir = ThrowMath.withSpread(
+                ThrowMath.direction(player.getYRot(), ThrowMath.clampPitch(player.getXRot())),
+                player.getRandom(), ThrowMath.inaccuracyDegrees(ThrowMath.focus(0.0D)));
+        throwItem(player, session(player), hand, dir, ThrowMath.powerMultiplier(0.0F), 0.0F,
+                cfg.inheritShooterMotion.get());
     }
 
     /**
@@ -280,7 +310,7 @@ public final class ServerThrowManager
     {
         if (level.isClientSide || DISPATCHING.isEmpty()) return;
         for (ServerPlayer player : DISPATCHING) {
-            Session s = SESSIONS.get(player.getUUID());
+            Session s = SESSIONS.peek(player);
             if (s == null || s.pending == null || s.applied || player.level() != level) continue;
             PendingThrow pending = s.pending;
             if (entity instanceof Projectile projectile && pending.absoluteSpeed() <= 0.0D) {
@@ -320,16 +350,5 @@ public final class ServerThrowManager
         if (pending.inheritMotion()) {
             projectile.setDeltaMovement(projectile.getDeltaMovement().add(shooterAdj));
         }
-    }
-
-    private static float sane(float value, float reference, float tolerance)
-    {
-        if (!Float.isFinite(value)) return reference;
-        return Math.abs(Mth.wrapDegrees(value - reference)) <= tolerance ? value : reference;
-    }
-
-    private static float clampFinite(float value, float max)
-    {
-        return Float.isFinite(value) ? Mth.clamp(value, -max, max) : 0.0F;
     }
 }

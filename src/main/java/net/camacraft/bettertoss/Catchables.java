@@ -1,5 +1,7 @@
 package net.camacraft.bettertoss;
 
+import net.camacraft.camafy.config.IdMatcher;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -23,7 +25,6 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /** Which projectiles can be caught, and how a caught one looks and flies when thrown back. */
 public final class Catchables
@@ -31,10 +32,10 @@ public final class Catchables
     public static final TagKey<EntityType<?>> CATCHABLE = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(BetterTossMod.MODID, "catchable"));
     public static final TagKey<EntityType<?>> UNCATCHABLE = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(BetterTossMod.MODID, "uncatchable"));
 
-    private static List<? extends String> blacklistSource;
-    private static Set<ResourceLocation> blacklist = Set.of();
-    private static List<? extends String> whitelistSource;
-    private static Set<ResourceLocation> whitelist = Set.of();
+    private static final IdMatcher.Cached<EntityType<?>> BLACKLIST = IdMatcher.cached(BuiltInRegistries.ENTITY_TYPE,
+            "Better Toss catch.blacklist", () -> BTConfig.SERVER.catchBlacklist.get());
+    private static final IdMatcher.Cached<EntityType<?>> WHITELIST = IdMatcher.cached(BuiltInRegistries.ENTITY_TYPE,
+            "Better Toss catch.whitelist", () -> BTConfig.SERVER.catchWhitelist.get());
     private static List<? extends String> displaySource;
     private static Map<ResourceLocation, Item> displayItems = Map.of();
     private static List<? extends String> speedSource;
@@ -45,11 +46,10 @@ public final class Catchables
     public static boolean isCatchable(Projectile projectile)
     {
         EntityType<?> type = projectile.getType();
-        ResourceLocation id = ForgeRegistries.ENTITY_TYPES.getKey(type);
-        if (type.is(UNCATCHABLE) || (id != null && blacklist().contains(id))) return false;
-        boolean explicit = type.is(CATCHABLE) || (id != null && whitelist().contains(id));
+        if (type.is(UNCATCHABLE) || BLACKLIST.matches(type)) return false;
+        boolean explicit = type.is(CATCHABLE) || WHITELIST.matches(type);
         if (explicit) return true;
-        if (!whitelist().isEmpty()) return false;
+        if (!WHITELIST.get().isEmpty()) return false;
         if (projectile instanceof FishingHook) return false;
         if (BTConfig.SERVER.blockArrows.get() && projectile instanceof AbstractArrow) return false;
         if (BTConfig.SERVER.blockHurtingProjectiles.get() && projectile instanceof AbstractHurtingProjectile) return false;
@@ -106,26 +106,6 @@ public final class Catchables
         if (type == EntityType.TRIDENT) return SoundEvents.TRIDENT_THROW;
         if (projectile instanceof AbstractArrow) return SoundEvents.ARROW_SHOOT;
         return SoundEvents.SNOWBALL_THROW;
-    }
-
-    private static Set<ResourceLocation> blacklist()
-    {
-        List<? extends String> src = BTConfig.SERVER.catchBlacklist.get();
-        if (src != blacklistSource) {
-            blacklist = Throwables.parseIds(src);
-            blacklistSource = src;
-        }
-        return blacklist;
-    }
-
-    private static Set<ResourceLocation> whitelist()
-    {
-        List<? extends String> src = BTConfig.SERVER.catchWhitelist.get();
-        if (src != whitelistSource) {
-            whitelist = Throwables.parseIds(src);
-            whitelistSource = src;
-        }
-        return whitelist;
     }
 
     private static Map<ResourceLocation, Item> displayItems()

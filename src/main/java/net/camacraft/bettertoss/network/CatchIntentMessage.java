@@ -1,8 +1,8 @@
 package net.camacraft.bettertoss.network;
 
 import net.camacraft.bettertoss.server.CatchManager;
+import net.camacraft.camafy.network.Packets;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -29,12 +29,6 @@ public class CatchIntentMessage
 
     public static void handle(CatchIntentMessage msg, Supplier<NetworkEvent.Context> ctx)
     {
-        ctx.get().enqueueWork(() -> {
-            ServerPlayer sender = ctx.get().getSender();
-            if (sender != null) {
-                CatchManager.setIntent(sender, msg.ready);
-            }
-        });
-        ctx.get().setPacketHandled(true);
+        Packets.handleServer(ctx, sender -> CatchManager.setIntent(sender, msg.ready));
     }
 }

@@ -4,7 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.BetterTossMod;
-import net.camacraft.bettertoss.ThrowMath;
+import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
@@ -21,8 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * First-person feel: the charging hand pulls up and back and trembles while the aim is unsteady,
- * whips forward on release; and a caught projectile is drawn in the main hand in place of whatever
+ * First-person feel: the charging hand pulls up and back (swaying while the aim is unsteady, if
+ * handShake is on) and whips forward on release; and a caught projectile is drawn in the main hand in place of whatever
  * that hand nominally holds. All visual, all read from the local throw state.
  */
 @Mod.EventBusSubscriber(modid = BetterTossMod.MODID, value = Dist.CLIENT)
@@ -111,7 +111,7 @@ public final class FirstPersonAnimator
     }
 
     /**
-     * Wind-up (with tremble) while charging with this hand, and the forward whip after a release.
+     * Wind-up (with the optional sway) while charging with this hand, and the forward whip after a release.
      * With record set, every transform is remembered so it can be undone before the off hand draws.
      */
     private static void applyThrowAnim(PoseStack pose, LocalPlayer player, boolean mainHand, float pt, boolean record)
@@ -132,11 +132,12 @@ public final class FirstPersonAnimator
         }
 
         if (ClientThrowing.isCharging() && (ClientThrowing.hand() == InteractionHand.MAIN_HAND) == mainHand) {
-            float c = (float) ThrowMath.smoothstep((ClientThrowing.chargeTicks() + pt) / 5.0D);
+            float c = (float) Easing.smoothstep((ClientThrowing.chargeTicks() + pt) / 5.0D);
             float focus = ClientThrowing.focus(pt);
-            float shake = BTConfig.CLIENT.handShake.get() ? (1.0F - focus) * 2.0F : 0.0F;
-            float tx = Mth.sin(t * 2.3F) * shake + Mth.sin(t * 3.9F + 1.3F) * shake * 0.5F;
-            float tz = Mth.sin(t * 2.9F + 0.7F) * shake * 0.7F;
+            // Off by default; when on, a slow sway (1.5-2.5 cycles a second) rather than a tremble.
+            float shake = BTConfig.CLIENT.handShake.get() ? (1.0F - focus) * 1.5F : 0.0F;
+            float tx = Mth.sin(t * 0.5F) * shake + Mth.sin(t * 0.8F + 1.3F) * shake * 0.5F;
+            float tz = Mth.sin(t * 0.6F + 0.7F) * shake * 0.7F;
             // Cocked: lifted up the screen, pulled in toward the centre and a touch further away.
             translate(pose, side * -0.10D * c, 0.02D * c, -0.08D * c, record);
             rotate(pose, Axis.XP, 34.0F * c + tx * c, record);

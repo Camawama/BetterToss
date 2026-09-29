@@ -16,10 +16,8 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
 import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.client.event.ViewportEvent;
-import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -39,8 +37,12 @@ public final class ClientEvents
 
     private static boolean locked()
     {
+        // A line out belongs to the fishing rod (Nice Catch reels on the use button), so the
+        // lock never takes use-clicks from a player who is fishing.
+        LocalPlayer player = Minecraft.getInstance().player;
         return ClientCatchState.localHolding() && BTConfig.SERVER.catchEnabled.get()
-                && BTConfig.SERVER.lockInputWhileHolding.get();
+                && BTConfig.SERVER.lockInputWhileHolding.get()
+                && (player == null || player.fishing == null);
     }
 
     @SubscribeEvent
@@ -69,8 +71,9 @@ public final class ClientEvents
 
     /**
      * First interception point: the use key. Holding a caught projectile turns every click into a
-     * (caught) throw charge. Otherwise a right-click with a throwable while aiming at nothing starts
-     * the charge; aiming at a block or entity keeps vanilla behaviour so doors and chests still work.
+     * (caught) throw charge. Otherwise a right-click with a throwable while aiming at nothing is
+     * taken: a quick click is a weak, uncharged throw, a hold becomes a charge. Aiming at a block
+     * or entity keeps vanilla behaviour so doors and chests still work.
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onClickInput(InputEvent.InteractionKeyMappingTriggered event)
@@ -78,18 +81,19 @@ public final class ClientEvents
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null || !modActive(mc)) return;
+        if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND) ClientThrowing.onUseClick();
 
         if (locked()) {
             event.setCanceled(true);
             event.setSwingHand(false);
             if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND
-                    && ClientThrowing.canStartCharge() && !ClientThrowing.useHeldLastTick()) {
+                    && ClientThrowing.canStartCharge() && ClientThrowing.useReleasedSinceCatch()) {
                 ClientThrowing.beginCharge(ThrowMode.CAUGHT, InteractionHand.MAIN_HAND);
             }
             return;
         }
         if (!event.isUseItem()) return;
-        if (ClientThrowing.isCharging()) {
+        if (ClientThrowing.ownsUseClick()) {
             event.setCanceled(true);
             event.setSwingHand(false);
             return;
@@ -98,11 +102,11 @@ public final class ClientEvents
         ItemStack stack = player.getItemInHand(event.getHand());
         if (!Throwables.isThrowable(stack)) return;
         boolean aimingAtNothing = mc.hitResult == null || mc.hitResult.getType() == HitResult.Type.MISS;
-        if (aimingAtNothing && !player.isHandsBusy() && ClientThrowing.canStartCharge()
-                && !player.getCooldowns().isOnCooldown(stack.getItem()) && !ClientThrowing.useHeldLastTick()) {
+        if (aimingAtNothing && !player.isHandsBusy() && ClientThrowing.canPress()
+                && !player.getCooldowns().isOnCooldown(stack.getItem())) {
             event.setCanceled(true);
             event.setSwingHand(false);
-            ClientThrowing.beginCharge(ThrowMode.ITEM, event.getHand());
+            ClientThrowing.pressUse(event.getHand(), stack);
         }
     }
 
@@ -121,7 +125,7 @@ public final class ClientEvents
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.PASS);
             if (event.getHand() == InteractionHand.MAIN_HAND && ClientThrowing.canStartCharge()
-                    && !ClientThrowing.useHeldLastTick()) {
+                    && ClientThrowing.useReleasedSinceCatch()) {
                 ClientThrowing.beginCharge(ThrowMode.CAUGHT, InteractionHand.MAIN_HAND);
             }
             return;
@@ -131,9 +135,8 @@ public final class ClientEvents
         if (player.getCooldowns().isOnCooldown(stack.getItem())) return;
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.PASS);
-        if (!ClientThrowing.isCharging() && !player.isHandsBusy() && ClientThrowing.canStartCharge()
-                && !ClientThrowing.useHeldLastTick()) {
-            ClientThrowing.beginCharge(ThrowMode.ITEM, event.getHand());
+        if (!ClientThrowing.ownsUseClick() && !player.isHandsBusy() && ClientThrowing.canPress()) {
+            ClientThrowing.pressUse(event.getHand(), stack);
         }
     }
 
@@ -158,15 +161,6 @@ public final class ClientEvents
         if (mc.level != null) ClientThrowing.sampleRotation(mc);
     }
 
-    @SubscribeEvent
-    public static void onOverlayRender(RenderGuiOverlayEvent.Pre event)
-    {
-        if (!BTConfig.CLIENT.showBar.get() || !ThrowBarOverlay.shouldShow()) return;
-        if (!event.getOverlay().id().equals(VanillaGuiOverlay.EXPERIENCE_BAR.id())) return;
-        event.setCanceled(true);
-        ThrowBarOverlay.render(event.getGuiGraphics(), event.getWindow(), event.getPartialTick());
-    }
-
     /** Focusing a throw narrows the view a little; vanilla smooths the transition for us. */
     @SubscribeEvent
     public static void onComputeFov(ComputeFovModifierEvent event)
@@ -177,7 +171,7 @@ public final class ClientEvents
         event.setNewFovModifier(event.getNewFovModifier() * multiplier);
     }
 
-    /** The unsteady-aim shake, dying away as focus builds, plus a tiny kick on release. */
+    /** The unsteady-aim sway (if enabled), dying away as focus builds, plus a tiny kick on release. */
     @SubscribeEvent
     public static void onCameraSetup(ViewportEvent.ComputeCameraAngles event)
     {
@@ -185,10 +179,11 @@ public final class ClientEvents
         if (BTConfig.CLIENT.cameraShake.get() && ClientThrowing.isCharging()) {
             float amp = BTConfig.CLIENT.cameraShakeDegrees.get().floatValue() * (1.0F - ClientThrowing.focus(pt));
             if (amp > 0.001F) {
+                // A slow sway, about one to two and a half cycles a second - not a buzz.
                 double t = ClientThrowing.chargeTicks() + pt;
-                event.setPitch(event.getPitch() + (float) (Math.sin(t * 2.3D) * 0.6D + Math.sin(t * 3.7D + 0.8D) * 0.4D) * amp);
-                event.setYaw(event.getYaw() + (float) (Math.sin(t * 1.9D + 0.3D) * 0.5D + Math.sin(t * 4.1D + 1.7D) * 0.3D) * amp);
-                event.setRoll(event.getRoll() + (float) Math.sin(t * 2.7D + 1.1D) * amp * 0.35F);
+                event.setPitch(event.getPitch() + (float) (Math.sin(t * 0.45D) * 0.6D + Math.sin(t * 0.75D + 0.8D) * 0.4D) * amp);
+                event.setYaw(event.getYaw() + (float) (Math.sin(t * 0.38D + 0.3D) * 0.5D + Math.sin(t * 0.82D + 1.7D) * 0.3D) * amp);
+                event.setRoll(event.getRoll() + (float) Math.sin(t * 0.55D + 1.1D) * amp * 0.35F);
             }
         }
         if (BTConfig.CLIENT.throwKick.get()) {

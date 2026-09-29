@@ -25,5 +25,6 @@ public class BetterTossMod
         BTNet.register();
         context.registerConfig(ModConfig.Type.SERVER, BTConfig.SERVER_SPEC);
         context.registerConfig(ModConfig.Type.CLIENT, BTConfig.CLIENT_SPEC);
+        BTConfig.registerMigrations(context.getModEventBus());
     }
 }

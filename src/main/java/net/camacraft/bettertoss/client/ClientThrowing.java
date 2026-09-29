@@ -1,6 +1,5 @@
 package net.camacraft.bettertoss.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.ThrowMath;
 import net.camacraft.bettertoss.ThrowMode;
@@ -9,18 +8,27 @@ import net.camacraft.bettertoss.network.BTNet;
 import net.camacraft.bettertoss.network.CatchIntentMessage;
 import net.camacraft.bettertoss.network.ChargeCancelMessage;
 import net.camacraft.bettertoss.network.ChargeStartMessage;
+import net.camacraft.bettertoss.network.TapThrowMessage;
 import net.camacraft.bettertoss.network.ThrowMessage;
+import net.camacraft.camafy.client.input.Keys;
+import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.Util;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The local player's throw state machine: one charge at a time (a throwable item, a caught
  * projectile, or the selected stack via the drop key), released frame-accurately on the button's
- * release event with the flick measured at that instant. Also owns the drop-key tap-vs-hold logic
- * and the catch-key intent sent to the server.
+ * release event with the flick measured at that instant. Also owns the tap-vs-hold logic of the use
+ * key (a quick click is an uncharged throw) and the drop key (a tap drops), and the catch-key intent
+ * sent to the server.
  */
 public final class ClientThrowing
 {
@@ -42,7 +50,16 @@ public final class ClientThrowing
     private static int dropHeldTicks;
     private static boolean dropCtrl;
 
-    private static boolean useHeldLastTick;
+    // A use click with a throwable waits here until the button comes up (an uncharged throw) or has
+    // been held for useHoldTicks (a charge).
+    private static boolean usePending;
+    private static boolean usePendingThisTick;
+    private static int useHeldTicks;
+    private static InteractionHand useHand = InteractionHand.MAIN_HAND;
+    /** This click is already ours: the hands vanilla has still to ask about it are refused. */
+    private static boolean useClickTaken;
+    /** False from a catch until the use button next comes up: the press that caught must not also throw. */
+    private static boolean useReleasedSinceCatch = true;
     private static boolean catchIntent;
 
     private static final FlickTracker FLICK = new FlickTracker();
@@ -79,10 +96,16 @@ public final class ClientThrowing
         return phase == Phase.CHARGING;
     }
 
-    /** Whether the use button was already held during the previous tick (guards against auto-repeat starting a charge). */
-    public static boolean useHeldLastTick()
+    /** Whether the use button has come up since the last catch, so a caught projectile needs a fresh press. */
+    public static boolean useReleasedSinceCatch()
     {
-        return useHeldLastTick;
+        return useReleasedSinceCatch;
+    }
+
+    /** Charging, a press still deciding between a click and a charge, or a click already thrown: any use input is ours to refuse. */
+    public static boolean ownsUseClick()
+    {
+        return phase == Phase.CHARGING || usePending || useClickTaken;
     }
 
     /** The power bar, 0..1: sweeping up and back down, or filling once, per client config. */
@@ -91,8 +114,7 @@ public final class ClientThrowing
         float sweep = Math.max(1, BTConfig.CLIENT.chargeSweepTicks.get());
         float t = (chargeTicks + partialTick) / sweep;
         if (BTConfig.CLIENT.chargeMode.get() == BTConfig.ChargeMode.RAMP) return Math.min(1.0F, t);
-        float s = t % 2.0F;
-        return s <= 1.0F ? s : 2.0F - s;
+        return Easing.pingPong(t);
     }
 
     /** 0 = just pressed and shaky, 1 = fully steadied. Mirrors the server's curve. */
@@ -110,8 +132,14 @@ public final class ClientThrowing
 
     public static boolean canStartCharge()
     {
+        return cooldown <= 0 && canPress();
+    }
+
+    /** Whether a use click can be taken at all. Unlike a charge it ignores the throw cooldown: a quick click must never be lost. */
+    public static boolean canPress()
+    {
         Minecraft mc = Minecraft.getInstance();
-        return phase == Phase.IDLE && cooldown <= 0 && mc.screen == null && mc.player != null
+        return phase == Phase.IDLE && mc.screen == null && mc.player != null
                 && !mc.player.isSpectator() && BTConfig.serverLoaded() && BTConfig.SERVER.enabled.get();
     }
 
@@ -163,6 +191,74 @@ public final class ClientThrowing
         mc.gameRenderer.itemInHandRenderer.itemUsed(hand);
     }
 
+    // ---- use key: quick click vs. hold ----
+
+    /**
+     * Vanilla asks the main hand first on every use click, so this is where a click begins. A click
+     * queued behind a press that only started waiting this tick means both landed between the same
+     * two ticks, so that press was already let go: it was a quick click, and it is thrown now.
+     * (Auto-repeat can't be what arrived: vanilla holds it off for 4 ticks after any use.)
+     */
+    public static void onUseClick()
+    {
+        useClickTaken = false;
+        if (usePending && usePendingThisTick) tap(Minecraft.getInstance(), useHand);
+    }
+
+    /**
+     * A use click with a throwable, aimed at nothing (the caller has cancelled vanilla's use).
+     * Released before useHoldTicks it is thrown at once as a weak, uncharged throw, so throwables
+     * can still be spammed; held longer it becomes a charge. Items vanilla already throws on release
+     * (tridents) charge from the first tick.
+     */
+    public static void pressUse(InteractionHand pressHand, ItemStack stack)
+    {
+        useClickTaken = true;
+        if (Throwables.throwsOnRelease(stack)) {
+            if (canStartCharge()) beginCharge(ThrowMode.ITEM, pressHand);
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (!ThrowControls.useDown(mc)) {
+            tap(mc, pressHand); // pressed and let go before this tick even saw the click
+            return;
+        }
+        usePending = true;
+        usePendingThisTick = true;
+        useHeldTicks = 0;
+        useHand = pressHand;
+    }
+
+    /**
+     * A quick click: the server throws it as a charge released at an empty bar (minimum power, the
+     * widest spread) through the item's own use(). No throw cooldown applies, so clicks can be
+     * spammed; the arm just swings, as vanilla's would.
+     */
+    private static void tap(Minecraft mc, InteractionHand tapHand)
+    {
+        usePending = false;
+        LocalPlayer player = mc.player;
+        ClientPacketListener connection = mc.getConnection();
+        if (player == null || connection == null || mc.screen != null || player.isSpectator()) return;
+        ItemStack stack = player.getItemInHand(tapHand);
+        if (!Throwables.isThrowable(stack) || player.getCooldowns().isOnCooldown(stack.getItem())) return;
+        // What vanilla sends ahead of every item use: the selected slot (a number key pressed this
+        // same tick is not sent until the next) and this frame's aim.
+        connection.send(new ServerboundSetCarriedItemPacket(player.getInventory().selected));
+        connection.send(new ServerboundMovePlayerPacket.PosRot(player.getX(), player.getY(), player.getZ(),
+                player.getYRot(), player.getXRot(), player.onGround()));
+        BTNet.sendToServer(new TapThrowMessage(tapHand));
+        player.swing(tapHand);
+        mc.gameRenderer.itemInHandRenderer.itemUsed(tapHand);
+    }
+
+    /** The use button came up: a press still waiting to become a charge was a quick click. */
+    private static void onUseReleased(Minecraft mc)
+    {
+        useReleasedSinceCatch = true;
+        if (usePending) tap(mc, useHand);
+    }
+
     // ---- drop key ----
 
     /** The drop key was pressed (its click already swallowed from vanilla); decide tap vs. hold over the next ticks. */
@@ -191,9 +287,9 @@ public final class ClientThrowing
 
     // ---- frame-accurate release ----
 
-    private static InputConstants.Key controlKey(Minecraft mc)
+    private static KeyMapping controlKey(Minecraft mc)
     {
-        return mode == ThrowMode.DROP ? mc.options.keyDrop.getKey() : mc.options.keyUse.getKey();
+        return mode == ThrowMode.DROP ? mc.options.keyDrop : mc.options.keyUse;
     }
 
     private static boolean controlDown(Minecraft mc)
@@ -204,9 +300,10 @@ public final class ClientThrowing
     public static void onMouseButtonReleased(int button)
     {
         Minecraft mc = Minecraft.getInstance();
+        if (Keys.matchesMouseEvent(mc.options.keyUse, button)) onUseReleased(mc);
         if (phase == Phase.CHARGING) {
-            if (ThrowControls.matchesMouse(controlKey(mc), button)) release(mc.getPartialTick());
-        } else if (dropPending && ThrowControls.matchesMouse(mc.options.keyDrop.getKey(), button)) {
+            if (Keys.matchesMouseEvent(controlKey(mc), button)) release(mc.getPartialTick());
+        } else if (dropPending && Keys.matchesMouseEvent(mc.options.keyDrop, button)) {
             tapDrop(mc);
         }
     }
@@ -214,9 +311,10 @@ public final class ClientThrowing
     public static void onKeyReleased(int keyCode, int scanCode)
     {
         Minecraft mc = Minecraft.getInstance();
+        if (Keys.matchesKeyEvent(mc.options.keyUse, keyCode, scanCode)) onUseReleased(mc);
         if (phase == Phase.CHARGING) {
-            if (ThrowControls.matchesKey(controlKey(mc), keyCode, scanCode)) release(mc.getPartialTick());
-        } else if (dropPending && ThrowControls.matchesKey(mc.options.keyDrop.getKey(), keyCode, scanCode)) {
+            if (Keys.matchesKeyEvent(controlKey(mc), keyCode, scanCode)) release(mc.getPartialTick());
+        } else if (dropPending && Keys.matchesKeyEvent(mc.options.keyDrop, keyCode, scanCode)) {
             tapDrop(mc);
         }
     }
@@ -259,6 +357,17 @@ public final class ClientThrowing
             }
         }
 
+        if (usePending) {
+            if (mc.screen != null || player.isSpectator() || !Throwables.isThrowable(player.getItemInHand(useHand))) {
+                usePending = false; // a menu opened or the item left the hand: the click is void
+            } else if (!ThrowControls.useDown(mc)) {
+                tap(mc, useHand); // the release event was missed (focus loss etc.): still a quick click
+            } else if (++useHeldTicks >= BTConfig.CLIENT.useHoldTicks.get() && canStartCharge()) {
+                usePending = false;
+                beginCharge(ThrowMode.ITEM, useHand);
+            }
+        }
+
         if (phase == Phase.CHARGING) {
             boolean valid = mc.screen == null && !player.isSpectator() && switch (mode) {
                 case ITEM -> Throwables.isThrowable(player.getItemInHand(hand));
@@ -274,11 +383,16 @@ public final class ClientThrowing
             }
         }
 
-        useHeldLastTick = ThrowControls.useDown(mc);
+        if (!ThrowControls.useDown(mc)) useReleasedSinceCatch = true;
+        // Every click this tick has been through vanilla's keybind handling by now.
+        useClickTaken = false;
+        usePendingThisTick = false;
 
-        // Catch intent: only state changes travel.
+        // Catch intent: only state changes travel. Never while a line is out: the catch key
+        // shares right-click with reeling, and a mid-reel catch would lock the rod's use-clicks.
         boolean want = BTConfig.SERVER.enabled.get() && BTConfig.SERVER.catchEnabled.get()
-                && !ClientCatchState.localHolding() && !player.isSpectator() && ThrowControls.catchDown(mc);
+                && !ClientCatchState.localHolding() && !player.isSpectator() && player.fishing == null
+                && ThrowControls.catchDown(mc);
         if (want != catchIntent) {
             catchIntent = want;
             BTNet.sendToServer(new CatchIntentMessage(want));
@@ -292,6 +406,8 @@ public final class ClientThrowing
         // Whatever we were winding up is over: the catch owns the hand now, and a fresh press is
         // needed before the caught projectile can be thrown.
         if (phase == Phase.CHARGING && mode != ThrowMode.CAUGHT) cancelCharge(false);
+        usePending = false;
+        useReleasedSinceCatch = !ThrowControls.useDown(Minecraft.getInstance());
         cooldown = Math.max(cooldown, BTConfig.serverLoaded() ? BTConfig.SERVER.throwCooldownTicks.get() : 4);
         dropPending = false;
     }
@@ -304,7 +420,11 @@ public final class ClientThrowing
         throwAnimTicks = 0;
         dropPending = false;
         dropHeldTicks = 0;
-        useHeldLastTick = false;
+        usePending = false;
+        usePendingThisTick = false;
+        useHeldTicks = 0;
+        useClickTaken = false;
+        useReleasedSinceCatch = true;
         catchIntent = false;
         FLICK.clear();
     }

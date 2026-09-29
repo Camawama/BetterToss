@@ -1,9 +1,8 @@
 package net.camacraft.bettertoss.network;
 
 import net.camacraft.bettertoss.client.ClientPacketHandlers;
+import net.camacraft.camafy.network.Packets;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -40,8 +39,6 @@ public class ChargeSyncMessage
 
     public static void handle(ChargeSyncMessage msg, Supplier<NetworkEvent.Context> ctx)
     {
-        ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                () -> () -> ClientPacketHandlers.onChargeSync(msg.entityId, msg.state, msg.offHand)));
-        ctx.get().setPacketHandled(true);
+        Packets.handleClient(ctx, () -> () -> ClientPacketHandlers.onChargeSync(msg.entityId, msg.state, msg.offHand));
     }
 }

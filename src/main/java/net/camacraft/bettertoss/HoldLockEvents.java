@@ -24,8 +24,10 @@ public final class HoldLockEvents
     {
         if (player == null || !BTConfig.serverLoaded()) return false;
         BTConfig.Server cfg = BTConfig.SERVER;
+        // Never while a line is out: the rod's own use (Nice Catch re-dispatches it to reel in)
+        // must not be refused mid-reel.
         return cfg.enabled.get() && cfg.catchEnabled.get() && cfg.lockInputWhileHolding.get()
-                && CatchManager.isHolding(player);
+                && player.fishing == null && CatchManager.isHolding(player);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)

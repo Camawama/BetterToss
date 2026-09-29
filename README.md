@@ -3,13 +3,17 @@
 A Forge 1.20.1 mod that overhauls throwing. Every throwable projectile (snowballs, eggs, ender
 pearls, XP bottles, splash and lingering potions, tridents, and most modded throwables) gets:
 
-- **Charged throws** - tap right-click for a weak toss, or hold it: a power bar sweeps in the XP
-  bar's slot and the throw's speed follows where the bar is when you let go.
+- **Charged throws** - click right-click and the item is thrown straight away as a weak, uncharged
+  toss, so eggs and snowballs can still be spammed; hold it a moment (a quarter of a second by
+  default) and a power bar sweeps in the XP bar's slot, and the throw's speed follows where the bar
+  is when you let go. Only a charge throws harder. Tridents, which vanilla already throws on
+  release, charge from the start.
 - **Flicks** - flick the mouse as you release and the throw picks up that motion: flick up to lob
   it high, sideways to curve it. Thresholds and caps are all configurable.
-- **Focus** - a throw released instantly has a wide spread; the longer you hold, the more it
-  steadies, with a slight FOV narrowing as you concentrate. Quick throws are wild; patient throws
-  are precise. (Camera and hand shake exist as options but are off by default.)
+- **Focus** - a quick click or an early release has a wide spread; the longer you hold, the more
+  it steadies, with a slight FOV narrowing as you concentrate. Quick throws are wild; patient
+  throws are precise. (A gentle camera, hand and bar sway exist as options but are off by default, as are
+  the one-line tips above the hotbar.)
 - **Throw animations** - a wind-up pose while charging and a whip on release, in first person and
   for everyone watching in third person.
 - **Fling with Q** - tap the drop key to drop an item like vanilla; hold it to charge a fling.
@@ -31,8 +35,9 @@ entity type tags and config lists to tune it.
 
 ## Config
 
-- `config/bettertoss-client.toml` - bar sweep speed and mode, optional hints and shake, flick
-  sensitivity, FOV, animations, drop-key hold time.
+- `config/bettertoss-client.toml` - bar sweep speed and mode, optional tips and sway, flick
+  sensitivity, FOV, animations, and how long right-click and the drop key must be held before
+  they charge. Settings you never changed follow the mod when a default is retuned.
 - `<world>/serverconfig/bettertoss-server.toml` - power range, flick caps, focus timing and
   spread, fling speeds, catch radius/cone/rules/blacklists, and per-feature switches.
 

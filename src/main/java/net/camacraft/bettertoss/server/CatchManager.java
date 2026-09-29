@@ -7,6 +7,7 @@ import net.camacraft.bettertoss.network.BTNet;
 import net.camacraft.bettertoss.network.CaughtSyncMessage;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -16,6 +17,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -97,6 +99,7 @@ public final class CatchManager
         if (!cfg.enabled.get() || !cfg.catchEnabled.get()) return false;
         if (!INTENT.contains(player.getUUID()) || HELD.containsKey(player.getUUID())) return false;
         if (!player.isAlive() || player.isSpectator() || player.isSleeping()) return false;
+        if (player.fishing != null) return false; // the hand is on the reel, not reaching out
         if (player.isUsingItem() && !cfg.catchWhileUsingItem.get()) return false;
         if (cfg.requireEmptyHand.get() && !player.getMainHandItem().isEmpty()) return false;
         return true;
@@ -171,6 +174,12 @@ public final class CatchManager
                 "Fire", "OnGround", "Air", "FallDistance", "TicksFrozen"}) {
             nbt.remove(key);
         }
+        // Keep the real item. Some saves drop it (Vanilla Backport's egg writes no "Item", so a
+        // caught blue or brown egg came back as a plain white one).
+        if (projectile instanceof ThrowableItemProjectile thrown && !nbt.contains("Item", Tag.TAG_COMPOUND)) {
+            ItemStack item = thrown.getItem();
+            if (!item.isEmpty()) nbt.put("Item", item.save(new CompoundTag()));
+        }
         ItemStack display = Catchables.displayFor(projectile, nbt);
         double baseSpeed = Catchables.baseSpeed(projectile);
         Held held = new Held(nbt, display, baseSpeed, now(player));
@@ -204,6 +213,7 @@ public final class CatchManager
         }
         projectile.moveTo(player.getX(), player.getEyeY() - 0.1D, player.getZ(), player.getYRot(), player.getXRot());
         projectile.setOwner(player);
+        restoreItem(projectile, held);
         double speed = held.baseSpeed * speedMultiplier * BTConfig.SERVER.rethrowSpeedMultiplier.get();
         projectile.shoot(dir.x, dir.y, dir.z, (float) speed, 0.0F);
         if (inheritMotion) {
@@ -227,8 +237,18 @@ public final class CatchManager
         if (created.isEmpty() || !(created.get() instanceof Projectile projectile)) return;
         projectile.moveTo(player.getX(), player.getEyeY() - 0.3D, player.getZ(), player.getYRot(), 0.0F);
         projectile.setOwner(player);
+        restoreItem(projectile, held);
         projectile.setDeltaMovement(Vec3.ZERO);
         level.addFreshEntity(projectile);
+    }
+
+    /** Puts the caught item back on a re-created item projectile, whether or not its load read it. */
+    private static void restoreItem(Projectile projectile, Held held)
+    {
+        if (projectile instanceof ThrowableItemProjectile thrown && held.nbt.contains("Item", Tag.TAG_COMPOUND)) {
+            ItemStack item = ItemStack.of(held.nbt.getCompound("Item"));
+            if (!item.isEmpty()) thrown.setItem(item);
+        }
     }
 
     private static void clear(ServerPlayer player)
@@ -254,6 +274,13 @@ public final class CatchManager
         if (HELD.containsKey(player.getUUID())) dropHeld(player);
         HELD.remove(player.getUUID());
         INTENT.remove(player.getUUID());
+    }
+
+    /** A held catch is already in the player's persistent data; the in-memory maps must not leak into the next world. */
+    public static void onServerStopped()
+    {
+        HELD.clear();
+        INTENT.clear();
     }
 
     public static void onDeath(ServerPlayer player)

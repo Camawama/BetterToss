@@ -1,6 +1,8 @@
 package net.camacraft.bettertoss.client;
 
+import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.ThrowMath;
+import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
@@ -13,8 +15,8 @@ import net.minecraft.world.entity.player.Player;
  * humanoid model exactly where BOW_AND_ARROW or THROW_SPEAR would, and stay compatible with other
  * mods that touch the model afterwards.
  *
- * Wind-up: the throwing arm is cocked up and back over the shoulder, trembling while the aim is
- * unsteady, the torso twisted so the shoulder pulls back. Throw: the arm whips forward and down as
+ * Wind-up: the throwing arm is cocked up and back over the shoulder (swaying while the aim is
+ * unsteady, if the viewer has handShake on), the torso twisted so the shoulder pulls back. Throw: the arm whips forward and down as
  * the torso untwists, then everything eases back to the walk. Hold: a caught projectile is carried
  * chest-high in front, ready.
  */
@@ -70,10 +72,11 @@ public final class ThrowPoses
         if (state == null) return;
         double now = ClientCatchState.now();
         double held = now - state.chargeStart;
-        float blend = (float) ThrowMath.smoothstep(held / 5.0D);
+        float blend = (float) Easing.smoothstep(held / 5.0D);
         float focus = (float) ThrowMath.focus(held);
-        float tremble = (1.0F - focus) * 0.025F
-                * (Mth.sin((float) now * 2.3F) + 0.5F * Mth.sin((float) now * 3.9F + 1.1F));
+        // The same slow sway as the first-person hand, and like it off unless handShake is on.
+        float tremble = !BTConfig.CLIENT.handShake.get() ? 0.0F : (1.0F - focus) * 0.02F
+                * (Mth.sin((float) now * 0.5F) + 0.5F * Mth.sin((float) now * 0.8F + 1.1F));
         poseWindup(model, arm, blend, tremble);
     }
 
@@ -91,7 +94,7 @@ public final class ThrowPoses
         float x = Mth.lerp(ease, WINDUP_X, FOLLOW_X);
         float bodyYaw = Mth.lerp(ease, 0.4F, -0.3F) * s;
         // ...then the pose relaxes back onto the ordinary walk over the rest.
-        float weight = t < 0.4D ? 1.0F : 1.0F - (float) ThrowMath.smoothstep((t - 0.4D) / 0.6D);
+        float weight = t < 0.4D ? 1.0F : 1.0F - (float) Easing.smoothstep((t - 0.4D) / 0.6D);
         part.xRot = Mth.lerp(weight, part.xRot, x);
         part.yRot = Mth.lerp(weight, part.yRot, 0.1F * s);
         part.zRot = Mth.lerp(weight, part.zRot, 0.1F * s);
@@ -102,7 +105,7 @@ public final class ThrowPoses
     {
         ClientCatchState.AnimState state = ClientCatchState.anim(entity.getId(), false);
         if (state == null) return;
-        float blend = (float) ThrowMath.smoothstep((ClientCatchState.now() - state.holdStart) / 4.0D);
+        float blend = (float) Easing.smoothstep((ClientCatchState.now() - state.holdStart) / 4.0D);
         float s = arm == HumanoidArm.RIGHT ? 1.0F : -1.0F;
         ModelPart part = arm == HumanoidArm.RIGHT ? model.rightArm : model.leftArm;
         float itemX = part.xRot * 0.5F - ((float) Math.PI / 10F); // vanilla's held-item pose
