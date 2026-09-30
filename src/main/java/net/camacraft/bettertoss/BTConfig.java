@@ -45,11 +45,10 @@ public class BTConfig
         ConfigMigrator.register(modBus, CLIENT_SPEC, CLIENT.configVersion, Client.CURRENT_CONFIG_VERSION, from -> {
             if (from < 1) {
                 // The hints and every shake went off by default after the first files were written.
+                // (The old start-of-charge camera and hand shakes are gone altogether: a charge now
+                // starts steady and trembles once held too long, and Forge drops their keys.)
                 ConfigMigrator.move(CLIENT.showHints, true, false);
                 ConfigMigrator.move(CLIENT.barShake, true, false);
-                ConfigMigrator.move(CLIENT.cameraShake, true, false);
-                ConfigMigrator.move(CLIENT.cameraShakeDegrees, 0.6D, 0.3D);
-                ConfigMigrator.move(CLIENT.handShake, true, false);
                 ConfigMigrator.move(CLIENT.throwKick, true, false);
             }
         });
@@ -81,6 +80,11 @@ public class BTConfig
         public final ForgeConfigSpec.IntValue focusTicks;
         public final ForgeConfigSpec.DoubleValue maxInaccuracyDegrees;
         public final ForgeConfigSpec.DoubleValue minInaccuracyDegrees;
+
+        public final ForgeConfigSpec.BooleanValue strainEnabled;
+        public final ForgeConfigSpec.IntValue strainSteadyTicks;
+        public final ForgeConfigSpec.IntValue strainShakyTicks;
+        public final ForgeConfigSpec.DoubleValue strainMaxInaccuracyDegrees;
 
         public final ForgeConfigSpec.BooleanValue dropThrowEnabled;
         public final ForgeConfigSpec.DoubleValue dropThrowMinSpeed;
@@ -144,14 +148,25 @@ public class BTConfig
             b.pop();
 
             b.push("focus");
-            focusEnabled = b.comment("Throws start shaky and steady up the longer the button is held; hold time drives accuracy.")
+            focusEnabled = b.comment("Hurried throws are wild: a quick click or an early release has a wide random spread, which narrows over focusTicks of holding. (Holding too long is the strain settings below.)")
                     .define("enabled", true);
-            focusTicks = b.comment("Ticks of holding to reach a fully steady, accurate throw.")
+            focusTicks = b.comment("Ticks of holding to reach a fully focused, accurate throw.")
                     .defineInRange("focusTicks", 40, 1, 400);
             maxInaccuracyDegrees = b.comment("Random spread (degrees) of a throw released the instant the button is pressed.")
                     .defineInRange("maxInaccuracyDegrees", 7.0D, 0.0D, 45.0D);
-            minInaccuracyDegrees = b.comment("Random spread (degrees) of a fully steadied throw.")
+            minInaccuracyDegrees = b.comment("Random spread (degrees) of a fully focused throw.")
                     .defineInRange("minInaccuracyDegrees", 0.25D, 0.0D, 45.0D);
+            b.pop();
+
+            b.push("strain");
+            strainEnabled = b.comment("A charge held too long gets shaky, like a spear held out too long: steady for steadyTicks, then the throwing hand trembles more and more (fully by shakyTicks) and the throw scatters up to maxInaccuracyDegrees more. Camafy's shared hold strain, the same one Nice Catch's casts use. Also switches the tremble off for every player on this server.")
+                    .define("enabled", true);
+            strainSteadyTicks = b.comment("Ticks a charge can be held before the hand starts to tremble. Until then holding costs nothing.")
+                    .defineInRange("steadyTicks", 40, 0, 1200);
+            strainShakyTicks = b.comment("Ticks of holding at which the tremble and the extra spread are at their fullest (they build up smoothly from steadyTicks).")
+                    .defineInRange("shakyTicks", 100, 1, 2400);
+            strainMaxInaccuracyDegrees = b.comment("Extra random spread (degrees) of a throw held until shakyTicks, on top of the focus spread; less for a shorter hold. 0 keeps long holds accurate (the hand still trembles).")
+                    .defineInRange("maxInaccuracyDegrees", 4.0D, 0.0D, 45.0D);
             b.pop();
 
             b.push("dropThrow");
@@ -231,10 +246,9 @@ public class BTConfig
         public final ForgeConfigSpec.DoubleValue flickStrength;
 
         public final ForgeConfigSpec.DoubleValue focusFovMultiplier;
-        public final ForgeConfigSpec.BooleanValue cameraShake;
-        public final ForgeConfigSpec.DoubleValue cameraShakeDegrees;
-        public final ForgeConfigSpec.BooleanValue handShake;
         public final ForgeConfigSpec.BooleanValue throwKick;
+
+        public final ForgeConfigSpec.DoubleValue handTremble;
 
         public final ForgeConfigSpec.BooleanValue firstPersonAnimations;
         public final ForgeConfigSpec.BooleanValue thirdPersonPoses;
@@ -253,7 +267,7 @@ public class BTConfig
                     .define("showBar", true);
             showHints = b.comment("Show a one-line tip above the hotbar while charging or holding a caught projectile. Off by default: the bar says enough.")
                     .define("showHints", false);
-            barShake = b.comment("Sway the bar gently while your aim is unsteady, settling as you focus. Off by default.")
+            barShake = b.comment("Let the bar shiver too once a charge has been held too long (with the hand's tremble). Off by default: the hand shows it.")
                     .define("barShake", false);
             chargeSweepTicks = b.comment("Ticks for the power bar to sweep from empty to full.")
                     .defineInRange("chargeSweepTicks", 30, 5, 200);
@@ -280,16 +294,15 @@ public class BTConfig
             b.pop();
 
             b.push("focus");
-            focusFovMultiplier = b.comment("FOV multiplier once a throw is fully steadied (lower = more zoom).")
+            focusFovMultiplier = b.comment("FOV multiplier once a throw is fully focused (lower = more zoom).")
                     .defineInRange("focusFovMultiplier", 0.9D, 0.5D, 1.0D);
-            cameraShake = b.comment("Sway the view slowly while a throw is unsteady. Off by default; focus is shown by the FOV alone.")
-                    .define("cameraShake", false);
-            cameraShakeDegrees = b.comment("Peak camera sway (degrees) at the very start of a charge, if cameraShake is on.")
-                    .defineInRange("cameraShakeDegrees", 0.3D, 0.0D, 5.0D);
-            handShake = b.comment("Let the throwing hand sway while a throw is unsteady (the first-person hand and the third-person arm). Off by default.")
-                    .define("handShake", false);
             throwKick = b.comment("A tiny camera kick as the throw releases. Off by default.")
                     .define("throwKick", false);
+            b.pop();
+
+            b.push("strain");
+            handTremble = b.comment("How much the throwing hand trembles once a charge has been held too long: the first-person hand and item, and the third-person arm of anyone you watch. The hand is steady at first; when it starts and when it is at its shakiest are the server's strain settings. 1 is the intended look, 0 turns it off.")
+                    .defineInRange("handTremble", 1.0D, 0.0D, 3.0D);
             b.pop();
 
             b.push("animation");

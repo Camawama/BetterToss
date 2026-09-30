@@ -4,6 +4,7 @@ import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.BetterTossMod;
 import net.camacraft.bettertoss.ThrowMath;
 import net.camacraft.camafy.client.anim.Blink;
+import net.camacraft.camafy.client.charge.ChargeBar;
 import net.camacraft.camafy.client.gui.hud.HudBar;
 import net.camacraft.camafy.client.gui.hud.HudHint;
 import net.camacraft.camafy.client.gui.hud.XpBarSlot;
@@ -16,9 +17,10 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Draws the charge bar in the XP bar's slot (the way the horse jump bar replaces it): gold for an
  * item throw, green for a drop-key fling, purple for a caught projectile. The bar brightens as focus
- * builds (and, with barShake on, sways while the aim is unsteady); a full purple bar means "you're
- * holding a catch". The one-line tips above the hotbar only show with showHints on.
- * The slot is claimed through Camafy, which draws one mod's bar per frame.
+ * builds (and, with barShake on, shivers once the charge has been held too long); a full purple bar
+ * means "you're holding a catch". The one-line tips above the hotbar only show with showHints on.
+ * The slot is claimed through Camafy, which draws one mod's bar per frame, and the charge itself is
+ * Camafy's shared ChargeBar, the same sweep and look as Nice Catch's rod casts.
  */
 public final class ThrowBarOverlay
 {
@@ -60,9 +62,10 @@ public final class ThrowBarOverlay
         if (ClientThrowing.isCharging()) {
             float value = ClientThrowing.chargeValue(partialTick);
             float focus = ClientThrowing.focus(partialTick);
-            double t = ClientThrowing.chargeTicks() + partialTick;
+            float strain = ClientThrowing.strain(partialTick);
             if (BTConfig.CLIENT.barShake.get()) {
-                x += HudBar.jitter(t, 0.7D, 1.5D, 1.0D - focus); // a slow sway of a pixel or two
+                // A shiver of a pixel either way once the charge has been held too long.
+                x += ChargeBar.tremble(ClientThrowing.chargeTicks() + partialTick, strain);
             }
             int color;
             String hint;
@@ -83,14 +86,13 @@ public final class ThrowBarOverlay
                 }
                 default -> {
                     color = 0xFFE8A33A;
-                    hint = focus > 0.95F ? "bettertoss.hint.steady" : "bettertoss.hint.charge";
+                    hint = strain > 0.3F ? "bettertoss.hint.tiring"
+                            : focus > 0.95F ? "bettertoss.hint.steady" : "bettertoss.hint.charge";
                 }
             }
             color = Argb.lerpRgb(focus, color, Argb.brighten(color, 0.3F));
-            HudBar.background(graphics, x, y, HudBar.Style.XP_BEVEL);
-            // A heavy stack can't use the whole bar: shade the unreachable part and cap the fill.
-            HudBar.cap(graphics, x, y, reach, color);
-            HudBar.fill(graphics, x, y, value * reach, color, HudBar.Style.XP_BEVEL);
+            // A heavy stack can't use the whole bar: the unreachable part is shaded and the fill capped.
+            ChargeBar.draw(graphics, x, y, value, reach, color);
             drawHint(graphics, hint, Argb.brighten(color, 0.2F), false);
         } else if (ClientCatchState.localHolding()) {
             HudBar.draw(graphics, x, y, 1.0F, 0xFF8E5FD8, HudBar.Style.XP_BEVEL);

@@ -8,6 +8,7 @@ import net.camacraft.bettertoss.Throwables;
 import net.camacraft.bettertoss.network.BTNet;
 import net.camacraft.bettertoss.network.ChargeSyncMessage;
 import net.camacraft.bettertoss.network.ThrowMessage;
+import net.camacraft.camafy.charge.AimScatter;
 import net.camacraft.camafy.data.PlayerSessions;
 import net.camacraft.camafy.network.NetValidate;
 import net.minecraft.server.level.ServerPlayer;
@@ -179,10 +180,12 @@ public final class ServerThrowManager
             flickMagnitude = max > 0.0F ? Math.min(1.0D, Math.hypot(flickYaw, flickPitch) / max) : 0.0D;
         }
 
-        // Focus: how long the button was held decides the random spread.
+        // How long the button was held decides the random spread: a hurried release is wild until
+        // focus builds, and a charge held too long trembles off target again (strain).
         double focus = ThrowMath.focus(holdTicks);
-        double spread = ThrowMath.inaccuracyDegrees(focus);
-        Vec3 dir = ThrowMath.withSpread(
+        double spread = ThrowMath.inaccuracyDegrees(focus)
+                + ThrowMath.strainInaccuracyDegrees(ThrowMath.strain(holdTicks));
+        Vec3 dir = AimScatter.scatter(
                 ThrowMath.direction(yaw + flickYaw, ThrowMath.clampPitch(pitch + flickPitch)),
                 player.getRandom(), spread);
 
@@ -215,7 +218,7 @@ public final class ServerThrowManager
         player.resetLastActionTime();
 
         // The client sent its aim just ahead of this message, as vanilla does before an item use.
-        Vec3 dir = ThrowMath.withSpread(
+        Vec3 dir = AimScatter.scatter(
                 ThrowMath.direction(player.getYRot(), ThrowMath.clampPitch(player.getXRot())),
                 player.getRandom(), ThrowMath.inaccuracyDegrees(ThrowMath.focus(0.0D)));
         throwItem(player, session(player), hand, dir, ThrowMath.powerMultiplier(0.0F), 0.0F,

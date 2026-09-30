@@ -2,6 +2,7 @@ package net.camacraft.bettertoss.client;
 
 import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.ThrowMath;
+import net.camacraft.camafy.client.charge.HandTremor;
 import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
@@ -15,8 +16,8 @@ import net.minecraft.world.entity.player.Player;
  * humanoid model exactly where BOW_AND_ARROW or THROW_SPEAR would, and stay compatible with other
  * mods that touch the model afterwards.
  *
- * Wind-up: the throwing arm is cocked up and back over the shoulder (swaying while the aim is
- * unsteady, if the viewer has handShake on), the torso twisted so the shoulder pulls back. Throw: the arm whips forward and down as
+ * Wind-up: the throwing arm is cocked up and back over the shoulder (steady at first, trembling
+ * once the charge has been held too long, by the viewer's handTremble), the torso twisted so the shoulder pulls back. Throw: the arm whips forward and down as
  * the torso untwists, then everything eases back to the walk. Hold: a caught projectile is carried
  * chest-high in front, ready.
  */
@@ -73,10 +74,10 @@ public final class ThrowPoses
         double now = ClientCatchState.now();
         double held = now - state.chargeStart;
         float blend = (float) Easing.smoothstep(held / 5.0D);
-        float focus = (float) ThrowMath.focus(held);
-        // The same slow sway as the first-person hand, and like it off unless handShake is on.
-        float tremble = !BTConfig.CLIENT.handShake.get() ? 0.0F : (1.0F - focus) * 0.02F
-                * (Mth.sin((float) now * 0.5F) + 0.5F * Mth.sin((float) now * 0.8F + 1.1F));
+        // Held too long, the arm trembles like the first-person hand (Camafy's hold tremor, scaled by
+        // the viewer's handTremble); each thrower on their own clock, so two never shake in step.
+        float amount = ThrowMath.strain(held) * BTConfig.CLIENT.handTremble.get().floatValue();
+        float tremble = 0.025F * HandTremor.wave(held + entity.getId() * 3.7D, HandTremor.PITCH, amount);
         poseWindup(model, arm, blend, tremble);
     }
 

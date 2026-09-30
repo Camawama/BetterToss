@@ -10,8 +10,8 @@ import net.camacraft.bettertoss.network.ChargeCancelMessage;
 import net.camacraft.bettertoss.network.ChargeStartMessage;
 import net.camacraft.bettertoss.network.TapThrowMessage;
 import net.camacraft.bettertoss.network.ThrowMessage;
+import net.camacraft.camafy.client.charge.ChargeBar;
 import net.camacraft.camafy.client.input.Keys;
-import net.camacraft.camafy.util.anim.Easing;
 import net.minecraft.Util;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -108,19 +108,25 @@ public final class ClientThrowing
         return phase == Phase.CHARGING || usePending || useClickTaken;
     }
 
-    /** The power bar, 0..1: sweeping up and back down, or filling once, per client config. */
+    /** The power bar, 0..1: sweeping up and back down, or filling once, per client config (Camafy's shared charge bar). */
     public static float chargeValue(float partialTick)
     {
-        float sweep = Math.max(1, BTConfig.CLIENT.chargeSweepTicks.get());
-        float t = (chargeTicks + partialTick) / sweep;
-        if (BTConfig.CLIENT.chargeMode.get() == BTConfig.ChargeMode.RAMP) return Math.min(1.0F, t);
-        return Easing.pingPong(t);
+        int sweep = BTConfig.CLIENT.chargeSweepTicks.get();
+        float ticks = chargeTicks + partialTick;
+        if (BTConfig.CLIENT.chargeMode.get() == BTConfig.ChargeMode.RAMP) return ChargeBar.ramp(ticks, sweep);
+        return ChargeBar.oscillate(ticks, sweep);
     }
 
-    /** 0 = just pressed and shaky, 1 = fully steadied. Mirrors the server's curve. */
+    /** 0 = just pressed (the widest spread), 1 = fully focused. Mirrors the server's curve. */
     public static float focus(float partialTick)
     {
         return (float) ThrowMath.focus(chargeTicks + partialTick);
+    }
+
+    /** 0 while the charge is fresh and steady, rising to 1 once it has been held too long. Mirrors the server's curve. */
+    public static float strain(float partialTick)
+    {
+        return phase == Phase.CHARGING ? ThrowMath.strain(chargeTicks + partialTick) : 0.0F;
     }
 
     /** 1 at the instant of release easing to 0 - drives the first-person whip and camera kick. */

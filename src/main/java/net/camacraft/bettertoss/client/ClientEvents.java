@@ -171,21 +171,14 @@ public final class ClientEvents
         event.setNewFovModifier(event.getNewFovModifier() * multiplier);
     }
 
-    /** The unsteady-aim sway (if enabled), dying away as focus builds, plus a tiny kick on release. */
+    /**
+     * A tiny kick on release (if enabled). The view never shakes while charging: a charge held too
+     * long trembles in the hand instead (FirstPersonAnimator).
+     */
     @SubscribeEvent
     public static void onCameraSetup(ViewportEvent.ComputeCameraAngles event)
     {
         float pt = (float) event.getPartialTick();
-        if (BTConfig.CLIENT.cameraShake.get() && ClientThrowing.isCharging()) {
-            float amp = BTConfig.CLIENT.cameraShakeDegrees.get().floatValue() * (1.0F - ClientThrowing.focus(pt));
-            if (amp > 0.001F) {
-                // A slow sway, about one to two and a half cycles a second - not a buzz.
-                double t = ClientThrowing.chargeTicks() + pt;
-                event.setPitch(event.getPitch() + (float) (Math.sin(t * 0.45D) * 0.6D + Math.sin(t * 0.75D + 0.8D) * 0.4D) * amp);
-                event.setYaw(event.getYaw() + (float) (Math.sin(t * 0.38D + 0.3D) * 0.5D + Math.sin(t * 0.82D + 1.7D) * 0.3D) * amp);
-                event.setRoll(event.getRoll() + (float) Math.sin(t * 0.55D + 1.1D) * amp * 0.35F);
-            }
-        }
         if (BTConfig.CLIENT.throwKick.get()) {
             float whip = Math.max(ClientThrowing.throwWhip(pt, true), ClientThrowing.throwWhip(pt, false));
             if (whip > 0.0F) {

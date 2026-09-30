@@ -3,6 +3,7 @@
   "key.bettertoss.catch": "Catch Projectile (hold)",
   "bettertoss.hint.charge": "Release to throw — keep holding to steady your aim",
   "bettertoss.hint.steady": "Aim steady — release to throw",
+  "bettertoss.hint.tiring": "Your arm is tiring — release to throw",
   "bettertoss.hint.drop": "Release to fling the item",
   "bettertoss.hint.drop_stack": "Release to fling the whole stack",
   "bettertoss.hint.drop_stack_heavy": "Release to heave the whole stack — it's heavy",

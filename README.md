@@ -10,10 +10,14 @@ pearls, XP bottles, splash and lingering potions, tridents, and most modded thro
   release, charge from the start.
 - **Flicks** - flick the mouse as you release and the throw picks up that motion: flick up to lob
   it high, sideways to curve it. Thresholds and caps are all configurable.
-- **Focus** - a quick click or an early release has a wide spread; the longer you hold, the more
-  it steadies, with a slight FOV narrowing as you concentrate. Quick throws are wild; patient
-  throws are precise. (A gentle camera, hand and bar sway exist as options but are off by default, as are
-  the one-line tips above the hotbar.)
+- **Focus and strain** - a quick click or an early release has a wide spread, which narrows over
+  the first two seconds of a hold, with a slight FOV narrowing as you concentrate. Hold on too
+  long, though, and the charge gets shaky, like a spear held out too long: the hand is steady at
+  first, starts to tremble after about two seconds and shakes clearly by five, and the throw
+  scatters more the shakier it gets. Quick throws are wild and over-held throws are shaky; the
+  bar's first sweep up and back down is the steady one. The tremble is Camafy's shared hold
+  mechanic, the same as Nice Catch's rod casts. (The one-line tips above the hotbar are off by
+  default.)
 - **Throw animations** - a wind-up pose while charging and a whip on release, in first person and
   for everyone watching in third person.
 - **Fling with Q** - tap the drop key to drop an item like vanilla; hold it to charge a fling.
@@ -35,11 +39,13 @@ entity type tags and config lists to tune it.
 
 ## Config
 
-- `config/bettertoss-client.toml` - bar sweep speed and mode, optional tips and sway, flick
-  sensitivity, FOV, animations, and how long right-click and the drop key must be held before
-  they charge. Settings you never changed follow the mod when a default is retuned.
+- `config/bettertoss-client.toml` - bar sweep speed and mode, optional tips and bar shiver, how
+  much the hand trembles (`handTremble`), flick sensitivity, FOV, animations, and how long
+  right-click and the drop key must be held before they charge. Settings you never changed follow
+  the mod when a default is retuned.
 - `<world>/serverconfig/bettertoss-server.toml` - power range, flick caps, focus timing and
-  spread, fling speeds, catch radius/cone/rules/blacklists, and per-feature switches.
+  spread, strain timing and spread (when a held charge starts to shake and how far it throws you
+  off), fling speeds, catch radius/cone/rules/blacklists, and per-feature switches.
 
 ## License
 
