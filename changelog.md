@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Tridents are vanilla's again by default: their own draw, throw, Loyalty and Riptide, no charge bar, whatever the tags and lists say. Server config `tridents` (false) takes them over as before: the charge bar, its power, focus and strain apply to a trident throw.
+
 ## [1.0.0]
 
 ### Added

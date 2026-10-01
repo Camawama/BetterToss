@@ -40,6 +40,8 @@ public final class Throwables
     {
         if (stack.isEmpty()) return false;
         Item item = stack.getItem();
+        // Vanilla throws a trident itself (its draw, Loyalty, Riptide); it is left to vanilla unless asked.
+        if (item instanceof TridentItem && !BTConfig.SERVER.tridents.get()) return false;
         if (stack.is(NOT_THROWABLE) || DENY.matches(item)) return false;
         if (stack.is(THROWABLE) || ALLOW.matches(item)) return true;
         if (BTConfig.SERVER.detectThrowableClasses.get()) {
@@ -51,9 +53,10 @@ public final class Throwables
     }
 
     /**
-     * Items vanilla already throws on release after a hold: tridents, and modded spears or javelins
-     * that draw like one (or like a bow). A quick click is no throw for these, so they charge from
-     * the first tick. Not judged by use duration: splash potions inherit a potion's drinking time.
+     * Items vanilla already throws on release after a hold: tridents (when {@code tridents} takes
+     * them over), and modded spears or javelins that draw like one (or like a bow). A quick click is
+     * no throw for these, so they charge from the first tick. Not judged by use duration: splash
+     * potions inherit a potion's drinking time.
      */
     public static boolean throwsOnRelease(ItemStack stack)
     {

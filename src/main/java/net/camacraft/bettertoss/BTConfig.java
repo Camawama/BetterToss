@@ -69,6 +69,7 @@ public class BTConfig
         public final ForgeConfigSpec.IntValue throwCooldownTicks;
         public final ForgeConfigSpec.BooleanValue inheritShooterMotion;
         public final ForgeConfigSpec.BooleanValue detectThrowableClasses;
+        public final ForgeConfigSpec.BooleanValue tridents;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableItems;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableBlacklist;
 
@@ -130,8 +131,11 @@ public class BTConfig
                     .defineInRange("throwCooldownTicks", 4, 0, 100);
             inheritShooterMotion = b.comment("Add the thrower's own velocity to the projectile, like vanilla does.")
                     .define("inheritShooterMotion", true);
-            detectThrowableClasses = b.comment("Treat any item extending the vanilla throwable item classes (snowball, egg, ender pearl, XP bottle, splash/lingering potion, trident) as throwable - this is what makes most modded throwables work out of the box.")
+            detectThrowableClasses = b.comment("Treat any item extending the vanilla throwable item classes (snowball, egg, ender pearl, XP bottle, splash/lingering potion; tridents only with tridents=true) as throwable - this is what makes most modded throwables work out of the box.")
                     .define("detectThrowableClasses", true);
+            tridents = b.comment("Take over tridents too: the charge bar, its power, focus and strain apply to a trident throw.",
+                            "Off, a trident is vanilla's alone - its own draw, throw, Loyalty and Riptide - whatever the tags and lists say.")
+                    .define("tridents", false);
             throwableItems = b.comment("Extra items to treat as throwables, by registry name (e.g. \"somemod:throwing_knife\"). The item tag bettertoss:throwable does the same via datapacks.")
                     .defineListAllowEmpty("throwableItems", List.<String>of(), BTConfig::isString);
             throwableBlacklist = b.comment("Items that must never be charge-thrown, by registry name. The item tag bettertoss:not_throwable does the same.")

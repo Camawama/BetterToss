@@ -1,13 +1,15 @@
 # Better Toss!
 
 A Forge 1.20.1 mod that overhauls throwing. Every throwable projectile (snowballs, eggs, ender
-pearls, XP bottles, splash and lingering potions, tridents, and most modded throwables) gets:
+pearls, XP bottles, splash and lingering potions, most modded throwables, and tridents if you ask)
+gets:
 
 - **Charged throws** - click right-click and the item is thrown straight away as a weak, uncharged
   toss, so eggs and snowballs can still be spammed; hold it a moment (a quarter of a second by
   default) and a power bar sweeps in the XP bar's slot, and the throw's speed follows where the bar
-  is when you let go. Only a charge throws harder. Tridents, which vanilla already throws on
-  release, charge from the start.
+  is when you let go. Only a charge throws harder. Tridents are left to vanilla (their own draw,
+  Loyalty and Riptide) unless the server config's `tridents` takes them over, and then they charge
+  from the start, as vanilla already throws them on release.
 - **Flicks** - flick the mouse as you release and the throw picks up that motion: flick up to lob
   it high, sideways to curve it. Thresholds and caps are all configurable.
 - **Focus and strain** - a quick click or an early release has a wide spread, which narrows over
