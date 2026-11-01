@@ -18,11 +18,16 @@ import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.UseAnim;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Which items the charge system takes over. Three layers, so other mods' throwables work without
- * anyone having to know about this mod: the item tags, the config lists, and (by default) anything
- * that extends a vanilla throwable item class.
+ * Which items the charge system takes over. Four layers, so other mods' throwables work without
+ * anyone having to know about this mod: the item tags, the config lists, (by default) anything
+ * that extends a vanilla throwable item class, and (by default) any item the server has seen throw
+ * itself the way vanilla throws a snowball ({@code server.ThrowableLearner}: a plain item, such as
+ * Cardiac's life bottle, whose own use() throws a projectile showing that same item).
  */
 public final class Throwables
 {
@@ -34,6 +39,9 @@ public final class Throwables
     private static final IdMatcher.Cached<Item> DENY = IdMatcher.cached(BuiltInRegistries.ITEM,
             "Better Toss throwableBlacklist", () -> BTConfig.SERVER.throwableBlacklist.get());
 
+    /** Items learned from their own throws; the server's set, and on a client the copy the server synced. */
+    private static final Set<Item> LEARNED = ConcurrentHashMap.newKeySet();
+
     private Throwables() {}
 
     public static boolean isThrowable(ItemStack stack)
@@ -44,12 +52,37 @@ public final class Throwables
         if (item instanceof TridentItem && !BTConfig.SERVER.tridents.get()) return false;
         if (stack.is(NOT_THROWABLE) || DENY.matches(item)) return false;
         if (stack.is(THROWABLE) || ALLOW.matches(item)) return true;
+        if (BTConfig.SERVER.learnThrowables.get() && LEARNED.contains(item)) return true;
         if (BTConfig.SERVER.detectThrowableClasses.get()) {
             return item instanceof SnowballItem || item instanceof EggItem || item instanceof EnderpearlItem
                     || item instanceof ExperienceBottleItem || item instanceof ThrowablePotionItem
                     || item instanceof TridentItem;
         }
         return false;
+    }
+
+    /** Never charge-thrown: the not_throwable tag or throwableBlacklist. */
+    public static boolean isDenied(ItemStack stack)
+    {
+        return stack.is(NOT_THROWABLE) || DENY.matches(stack.getItem());
+    }
+
+    /** Adds an item learned from its own throw; false if it was known already. */
+    public static boolean learn(Item item)
+    {
+        return LEARNED.add(item);
+    }
+
+    /** Replaces the learned set (the server's saved one at start, a client's on the server's sync, empty on leaving). */
+    public static void setLearned(Collection<Item> items)
+    {
+        LEARNED.clear();
+        LEARNED.addAll(items);
+    }
+
+    public static Set<Item> learned()
+    {
+        return Set.copyOf(LEARNED);
     }
 
     /**

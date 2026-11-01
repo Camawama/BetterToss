@@ -69,6 +69,7 @@ public class BTConfig
         public final ForgeConfigSpec.IntValue throwCooldownTicks;
         public final ForgeConfigSpec.BooleanValue inheritShooterMotion;
         public final ForgeConfigSpec.BooleanValue detectThrowableClasses;
+        public final ForgeConfigSpec.BooleanValue learnThrowables;
         public final ForgeConfigSpec.BooleanValue tridents;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableItems;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableBlacklist;
@@ -133,6 +134,8 @@ public class BTConfig
                     .define("inheritShooterMotion", true);
             detectThrowableClasses = b.comment("Treat any item extending the vanilla throwable item classes (snowball, egg, ender pearl, XP bottle, splash/lingering potion; tridents only with tridents=true) as throwable - this is what makes most modded throwables work out of the box.")
                     .define("detectThrowableClasses", true);
+            learnThrowables = b.comment("Learn other mods' throwables that don't extend a vanilla throwable class: an item whose own use throws a projectile showing that same item, at once and without a draw (the way vanilla throws a snowball or an XP bottle; Cardiac's life bottle is one), is charge-thrown from then on. Its first throw in a world is the item's own; learned items are saved with the world. The not_throwable tag and throwableBlacklist still win.")
+                    .define("learnThrowables", true);
             tridents = b.comment("Take over tridents too: the charge bar, its power, focus and strain apply to a trident throw.",
                             "Off, a trident is vanilla's alone - its own draw, throw, Loyalty and Riptide - whatever the tags and lists say.")
                     .define("tridents", false);

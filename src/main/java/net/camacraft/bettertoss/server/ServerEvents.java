@@ -12,6 +12,7 @@ import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -48,10 +49,20 @@ public final class ServerEvents
         }
     }
 
+    /** Last, and only when no one cancelled it: the item's own use() runs next (see {@link ThrowableLearner}). */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onRightClickItemLast(PlayerInteractEvent.RightClickItem event)
+    {
+        if (event.getEntity() instanceof ServerPlayer player && !ServerThrowManager.isDispatching(player)) {
+            ThrowableLearner.onRightClickItem(player, event.getItemStack());
+        }
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onEntityJoin(EntityJoinLevelEvent event)
     {
         ServerThrowManager.onEntityJoin(event.getEntity(), event.getLevel());
+        if (!event.getLevel().isClientSide) ThrowableLearner.onEntityJoin(event.getEntity());
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -74,7 +85,10 @@ public final class ServerEvents
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event)
     {
-        if (event.getEntity() instanceof ServerPlayer player) CatchManager.onLogin(player);
+        if (event.getEntity() instanceof ServerPlayer player) {
+            CatchManager.onLogin(player);
+            ThrowableLearner.onLogin(player);
+        }
     }
 
     @SubscribeEvent
@@ -83,7 +97,14 @@ public final class ServerEvents
         if (event.getEntity() instanceof ServerPlayer player) {
             ServerThrowManager.onLogout(player);
             CatchManager.onLogout(player);
+            ThrowableLearner.onLogout(player);
         }
+    }
+
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event)
+    {
+        ThrowableLearner.onServerStarted(event.getServer());
     }
 
     /** Session maps are static: clear them so a second singleplayer world in the same JVM starts clean. */
@@ -92,6 +113,7 @@ public final class ServerEvents
     {
         ServerThrowManager.onServerStopped();
         CatchManager.onServerStopped();
+        ThrowableLearner.onServerStopped();
     }
 
     @SubscribeEvent

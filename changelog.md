@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Cardiac's life bottles are charge-thrown like XP bottles (the owner, 2026-10-29: "Cardiac doesn't work with better toss. I should be able to use better toss to throw the life bottles"). The bottle is a plain item whose use throws a projectile of its own, so the class test (anything extending a vanilla throwable item) never saw it; it is now an optional entry in the `bettertoss:throwable` tag.
+- Other mods' throwables built the same way are learned from their first throw: when an item's own use throws, at once and without a draw, a projectile showing that same item (the way vanilla throws a snowball or an XP bottle), it is charge-thrown from then on, saved with the world and synced to every client (server config `learnThrowables`, on). Its first throw in a world is the item's own. The `bettertoss:not_throwable` tag and `throwableBlacklist` still win. The network protocol is 3 (a client and server must both have this version).
+
 ### Changed
 - Tridents are vanilla's again by default: their own draw, throw, Loyalty and Riptide, no charge bar, whatever the tags and lists say. Server config `tridents` (false) takes them over as before: the charge bar, its power, focus and strain apply to a trident throw.
 

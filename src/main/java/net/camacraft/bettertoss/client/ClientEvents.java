@@ -200,5 +200,7 @@ public final class ClientEvents
     {
         ClientThrowing.reset();
         ClientCatchState.clear();
+        // A remote server's learned throwables belong to it (singleplayer's server clears its own on stop).
+        if (Minecraft.getInstance().getSingleplayerServer() == null) Throwables.setLearned(java.util.List.of());
     }
 }

@@ -9,7 +9,7 @@ import net.minecraft.world.entity.Entity;
 public final class BTNet
 {
     /** Bump whenever any message's wire format changes, so mismatched jars fail fast at login. */
-    private static final String PROTOCOL_VERSION = "2";
+    private static final String PROTOCOL_VERSION = "3";
 
     public static final CamafyChannel CHANNEL = CamafyChannel.create(
             ResourceLocation.fromNamespaceAndPath(BetterTossMod.MODID, "main"), PROTOCOL_VERSION);
@@ -27,7 +27,8 @@ public final class BTNet
                 .serverbound(CatchIntentMessage.class, CatchIntentMessage::encode, CatchIntentMessage::decode, CatchIntentMessage::handle)
                 .clientbound(ChargeSyncMessage.class, ChargeSyncMessage::encode, ChargeSyncMessage::decode, ChargeSyncMessage::handle)
                 .clientbound(CaughtSyncMessage.class, CaughtSyncMessage::encode, CaughtSyncMessage::decode, CaughtSyncMessage::handle)
-                .serverbound(TapThrowMessage.class, TapThrowMessage::encode, TapThrowMessage::decode, TapThrowMessage::handle);
+                .serverbound(TapThrowMessage.class, TapThrowMessage::encode, TapThrowMessage::decode, TapThrowMessage::handle)
+                .clientbound(LearnedThrowablesMessage.class, LearnedThrowablesMessage::encode, LearnedThrowablesMessage::decode, LearnedThrowablesMessage::handle);
     }
 
     public static void sendToServer(Object message)

@@ -7,6 +7,10 @@
     "minecraft:experience_bottle",
     "minecraft:splash_potion",
     "minecraft:lingering_potion",
-    "minecraft:trident"
+    "minecraft:trident",
+    {
+      "id": "cardiac:life_bottle",
+      "required": false
+    }
   ]
 }
