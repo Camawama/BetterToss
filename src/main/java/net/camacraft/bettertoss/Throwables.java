@@ -23,11 +23,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Which items the charge system takes over. Four layers, so other mods' throwables work without
+ * Which items the charge system takes over. Five layers, so other mods' throwables work without
  * anyone having to know about this mod: the item tags, the config lists, (by default) anything
- * that extends a vanilla throwable item class, and (by default) any item the server has seen throw
- * itself the way vanilla throws a snowball ({@code server.ThrowableLearner}: a plain item, such as
- * Cardiac's life bottle, whose own use() throws a projectile showing that same item).
+ * that extends a vanilla throwable item class, (by default) every item some thrown-item projectile
+ * of the pack shows, found at world start before anyone throws one ({@code server.ThrowableScan}:
+ * IceCaves' ice ball), and (by default) any item the server has seen throw itself the way vanilla
+ * throws a snowball ({@code server.ThrowableLearner}: a plain item, such as Cardiac's life bottle,
+ * whose own use() throws a projectile showing that same item).
  */
 public final class Throwables
 {
@@ -39,7 +41,10 @@ public final class Throwables
     private static final IdMatcher.Cached<Item> DENY = IdMatcher.cached(BuiltInRegistries.ITEM,
             "Better Toss throwableBlacklist", () -> BTConfig.SERVER.throwableBlacklist.get());
 
-    /** Items learned from their own throws; the server's set, and on a client the copy the server synced. */
+    /**
+     * Items found by the start-up scan or learned from their own throws; the server's set, and on a
+     * client the copy the server synced.
+     */
     private static final Set<Item> LEARNED = ConcurrentHashMap.newKeySet();
 
     private Throwables() {}
@@ -51,8 +56,20 @@ public final class Throwables
         // Vanilla throws a trident itself (its draw, Loyalty, Riptide); it is left to vanilla unless asked.
         if (item instanceof TridentItem && !BTConfig.SERVER.tridents.get()) return false;
         if (stack.is(NOT_THROWABLE) || DENY.matches(item)) return false;
+        if (knownByItself(stack)) return true;
+        return BTConfig.SERVER.learnThrowables.get() && LEARNED.contains(item);
+    }
+
+    /**
+     * Throwable by the tag, the config list or a vanilla throwable class alone: what {@link #isThrowable}
+     * answers before the start-up scan and the learner have added anything (the scan asks this, so an item
+     * it finds is reported as its own find whatever an earlier world's throws taught).
+     */
+    public static boolean knownByItself(ItemStack stack)
+    {
+        if (stack.isEmpty()) return false;
+        Item item = stack.getItem();
         if (stack.is(THROWABLE) || ALLOW.matches(item)) return true;
-        if (BTConfig.SERVER.learnThrowables.get() && LEARNED.contains(item)) return true;
         if (BTConfig.SERVER.detectThrowableClasses.get()) {
             return item instanceof SnowballItem || item instanceof EggItem || item instanceof EnderpearlItem
                     || item instanceof ExperienceBottleItem || item instanceof ThrowablePotionItem
@@ -71,6 +88,12 @@ public final class Throwables
     public static boolean learn(Item item)
     {
         return LEARNED.add(item);
+    }
+
+    /** Adds the start-up scan's finds (the saved set stays what it was). */
+    public static void learnAll(Collection<Item> items)
+    {
+        LEARNED.addAll(items);
     }
 
     /** Replaces the learned set (the server's saved one at start, a client's on the server's sync, empty on leaving). */

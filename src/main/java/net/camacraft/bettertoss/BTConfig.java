@@ -70,6 +70,7 @@ public class BTConfig
         public final ForgeConfigSpec.BooleanValue inheritShooterMotion;
         public final ForgeConfigSpec.BooleanValue detectThrowableClasses;
         public final ForgeConfigSpec.BooleanValue learnThrowables;
+        public final ForgeConfigSpec.BooleanValue scanThrowableProjectiles;
         public final ForgeConfigSpec.BooleanValue tridents;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableItems;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableBlacklist;
@@ -136,6 +137,8 @@ public class BTConfig
                     .define("detectThrowableClasses", true);
             learnThrowables = b.comment("Learn other mods' throwables that don't extend a vanilla throwable class: an item whose own use throws a projectile showing that same item, at once and without a draw (the way vanilla throws a snowball or an XP bottle; Cardiac's life bottle is one), is charge-thrown from then on. Its first throw in a world is the item's own; learned items are saved with the world. The not_throwable tag and throwableBlacklist still win.")
                     .define("learnThrowables", true);
+            scanThrowableProjectiles = b.comment("At every world start, find other mods' hand-thrown items before anyone throws one: each misc-category entity type is created once (never spawned) and, when it is a thrown-item projectile (a snowball's kind), the item it shows is charge-thrown from the start if that item has a use of its own and isn't a block, food or something held or drawn (IceCaves' ice ball). The not_throwable tag and throwableBlacklist still win; the finds aren't saved, the scan runs again each start.")
+                    .define("scanThrowableProjectiles", true);
             tridents = b.comment("Take over tridents too: the charge bar, its power, focus and strain apply to a trident throw.",
                             "Off, a trident is vanilla's alone - its own draw, throw, Loyalty and Riptide - whatever the tags and lists say.")
                     .define("tridents", false);

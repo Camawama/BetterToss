@@ -101,10 +101,16 @@ public final class ServerEvents
         }
     }
 
+    /**
+     * The start-up scan runs before the saved learned set is loaded, so what it finds is told apart from what an
+     * earlier world's throws taught; then both are the known set.
+     */
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event)
     {
+        java.util.List<net.minecraft.world.item.Item> scanned = ThrowableScan.run(event.getServer());
         ThrowableLearner.onServerStarted(event.getServer());
+        Throwables.learnAll(scanned);
     }
 
     /** Session maps are static: clear them so a second singleplayer world in the same JVM starts clean. */

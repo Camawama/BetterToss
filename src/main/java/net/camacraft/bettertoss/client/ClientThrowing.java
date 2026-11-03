@@ -49,6 +49,8 @@ public final class ClientThrowing
     private static boolean dropPending;
     private static int dropHeldTicks;
     private static boolean dropCtrl;
+    /** The player tick a drop charge last ended in: a drop-key click read in that same tick was part of it. */
+    private static int dropEndedTick = Integer.MIN_VALUE;
 
     // A use click with a throwable waits here until the button comes up (an uncharged throw) or has
     // been held for useHoldTicks (a charge).
@@ -166,10 +168,32 @@ public final class ClientThrowing
     public static void cancelCharge(boolean notifyServer)
     {
         if (phase != Phase.CHARGING) return;
+        Minecraft mc = Minecraft.getInstance();
         phase = Phase.IDLE;
+        chargeEnded(mc);
         if (notifyServer) BTNet.sendToServer(new ChargeCancelMessage());
-        LocalPlayer player = Minecraft.getInstance().player;
+        LocalPlayer player = mc.player;
         if (player != null) ClientCatchState.setIdle(player.getId());
+    }
+
+    /**
+     * A charge is over: any click of its key still in vanilla's counter belongs to the hold that just ended. Holding
+     * a key makes the system repeat it, and each repeat is a click; a repeat that arrived in the same input batch as
+     * the release was still uncounted when the release threw, so the next tick's sweep read it as a fresh tap and
+     * dropped a second item (the owner, 2026-10-31: "it throws the item I charged but also counts as a second Q press
+     * and drops a second item. It doesn't happen every time"). Mouse buttons never repeat, but a use key on a key could.
+     */
+    private static void chargeEnded(Minecraft mc)
+    {
+        drainClicks(controlKey(mc));
+        if (mode == ThrowMode.DROP && mc.player != null) dropEndedTick = mc.player.tickCount;
+    }
+
+    private static void drainClicks(KeyMapping key)
+    {
+        while (key.consumeClick()) {
+            // nothing: the clicks were the hold's
+        }
     }
 
     /** The button came up: read the bar and the flick at this exact moment and tell the server. */
@@ -190,6 +214,7 @@ public final class ClientThrowing
         BTNet.sendToServer(new ThrowMessage(mode, hand, power, flick.yaw(), flick.pitch(), yaw, pitch, fullStack));
 
         phase = Phase.IDLE;
+        chargeEnded(mc);
         cooldown = BTConfig.SERVER.throwCooldownTicks.get();
         throwAnimTicks = THROW_ANIM_TICKS;
         throwAnimOffHand = hand == InteractionHand.OFF_HAND;
@@ -271,6 +296,8 @@ public final class ClientThrowing
     public static void onDropKeyPressed(boolean ctrl)
     {
         if (phase != Phase.IDLE || dropPending) return;
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player != null && player.tickCount == dropEndedTick) return; // a repeat of the hold that just ended (see chargeEnded)
         if (ClientCatchState.localHolding() && BTConfig.SERVER.lockInputWhileHolding.get()) return; // throw it first
         dropPending = true;
         dropHeldTicks = 0;
@@ -280,6 +307,8 @@ public final class ClientThrowing
     private static void tapDrop(Minecraft mc)
     {
         dropPending = false;
+        // A tap held long enough for the key to repeat (a long dropHoldTicks) left those repeats in the counter too.
+        drainClicks(mc.options.keyDrop);
         LocalPlayer player = mc.player;
         if (player == null || player.isSpectator()) return;
         // Exactly what vanilla does for a drop-key press.
@@ -426,6 +455,7 @@ public final class ClientThrowing
         throwAnimTicks = 0;
         dropPending = false;
         dropHeldTicks = 0;
+        dropEndedTick = Integer.MIN_VALUE;
         usePending = false;
         usePendingThisTick = false;
         useHeldTicks = 0;

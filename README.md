@@ -36,11 +36,15 @@ gets:
 Nothing is replaced. A charged throw runs the item's own `use()` on the server and rescales the
 projectile it spawns, so mod items that extend the vanilla throwable classes work as-is. Items that
 don't, but throw themselves the way vanilla throws a snowball (their own `use()` throws, at once, a
-projectile showing that same item: Cardiac's life bottle), are learned from their first throw and
-charged from then on, saved with the world (`learnThrowables`); Cardiac's life bottle is in the
-tag from the start. Anything else can be added through the `bettertoss:throwable` item tag or the
-`throwableItems` config list, and the `bettertoss:not_throwable` tag or `throwableBlacklist` keep
-an item out.
+projectile showing that same item: IceCaves' ice ball, Cardiac's life bottle), are found at every
+world start before anyone throws one: each misc-category entity type is created once (never
+spawned) and, when it is a thrown-item projectile, the item it shows is charge-thrown from the
+start if it is plainly an item thrown by hand (not a block, not food, nothing held or drawn, a
+`use()` of its own) (`scanThrowableProjectiles`). One the scan can't see is still learned from its
+first throw and charged from then on, saved with the world (`learnThrowables`); Cardiac's life
+bottle is in the tag as well. Anything else can be added through the `bettertoss:throwable` item
+tag or the `throwableItems` config list, and the `bettertoss:not_throwable` tag or
+`throwableBlacklist` keep an item out.
 Catching works on any `Projectile` entity, with the `bettertoss:catchable` / `bettertoss:uncatchable`
 entity type tags and config lists to tune it.
 
