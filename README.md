@@ -40,7 +40,13 @@ projectile showing that same item: IceCaves' ice ball, Cardiac's life bottle), a
 world start before anyone throws one: each misc-category entity type is created once (never
 spawned) and, when it is a thrown-item projectile, the item it shows is charge-thrown from the
 start if it is plainly an item thrown by hand (not a block, not food, nothing held or drawn, a
-`use()` of its own) (`scanThrowableProjectiles`). One the scan can't see is still learned from its
+`use()` of its own) (`scanThrowableProjectiles`). The same scan then reads the right-click code of
+every modded item's class (the class files as data; nothing is loaded or run) and takes the items
+whose code makes a projectile when they are things thrown, not things that shoot: they stack, have
+no durability, are not food and are not held or drawn (`scanItemUses`). That finds what no entity
+type names: block items that are thrown (Spelunkery's glowsticks; aimed at a block they are still
+placed), many items sharing one projectile type (its pebbles) and projectiles that are arrows
+underneath (the rocks of Spelunker's Charm). One the scan can't see is still learned from its
 first throw and charged from then on, saved with the world (`learnThrowables`); Cardiac's life
 bottle is in the tag as well. Anything else can be added through the `bettertoss:throwable` item
 tag or the `throwableItems` config list, and the `bettertoss:not_throwable` tag or

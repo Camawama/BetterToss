@@ -15,6 +15,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.entity.projectile.ItemSupplier;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -35,7 +38,8 @@ import java.util.UUID;
  * {@code Item} whose use() throws a {@link ThrowableItemProjectile} the way vanilla throws an XP bottle
  * (Cardiac's life bottle: the owner, 2026-10-29, "I should be able to use better toss to throw the life
  * bottles"). When a right-click that Better Toss left alone throws, in that same tick, a
- * {@code ThrowableItemProjectile} owned by the player that shows the item used, and the player isn't
+ * projectile owned by the player that shows the item used (a {@code ThrowableItemProjectile}, or another mod's
+ * projectile that shows an item), and the player isn't
  * drawing the item (bows, spears and slingshots throw on release, later), the item is thrown that way:
  * it is charge-thrown from then on, saved with the world and synced to every client. Its first throw is
  * the item's own. The {@code not_throwable} tag and {@code throwableBlacklist} still win.
@@ -63,12 +67,19 @@ public final class ThrowableLearner
     /** Every entity joining a server level. */
     public static void onEntityJoin(Entity entity)
     {
-        if (WATCHES.isEmpty() || !(entity instanceof ThrowableItemProjectile projectile)) return;
+        // Any projectile that shows an item: a thrown-item projectile, or an arrow underneath that shows what was
+        // thrown (MCreator's). A firework rocket is a boost, not a throw.
+        if (WATCHES.isEmpty() || !(entity instanceof Projectile projectile) || !(entity instanceof ItemSupplier supplier)
+                || entity instanceof FireworkRocketEntity) return;
         if (!(projectile.getOwner() instanceof ServerPlayer player)) return;
         Watch watch = WATCHES.remove(player.getUUID());
         if (watch == null || watch.tick() != tick(player.getServer()) || player.isUsingItem()) return;
-        ItemStack shown = projectile.getItem();
-        if (!shown.is(watch.item()) || !Throwables.learn(watch.item())) return;
+        ItemStack shown = supplier.getItem();
+        if (!shown.is(watch.item())) return;
+        // Beyond thrown-item projectiles only an item with a right-click of its mod's own is learned: the game's
+        // items that shoot something showing themselves are not throws.
+        if (!(entity instanceof ThrowableItemProjectile) && watch.item().getClass().getName().startsWith("net.minecraft.")) return;
+        if (!Throwables.learn(watch.item())) return;
         MinecraftServer server = player.getServer();
         data(server).add(BuiltInRegistries.ITEM.getKey(watch.item()));
         BetterTossMod.LOGGER.info("Better Toss: {} throws itself the way a snowball does ({}); it is charge-thrown from now on",

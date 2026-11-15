@@ -71,6 +71,7 @@ public class BTConfig
         public final ForgeConfigSpec.BooleanValue detectThrowableClasses;
         public final ForgeConfigSpec.BooleanValue learnThrowables;
         public final ForgeConfigSpec.BooleanValue scanThrowableProjectiles;
+        public final ForgeConfigSpec.BooleanValue scanItemUses;
         public final ForgeConfigSpec.BooleanValue tridents;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableItems;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> throwableBlacklist;
@@ -139,6 +140,9 @@ public class BTConfig
                     .define("learnThrowables", true);
             scanThrowableProjectiles = b.comment("At every world start, find other mods' hand-thrown items before anyone throws one: each misc-category entity type is created once (never spawned) and, when it is a thrown-item projectile (a snowball's kind), the item it shows is charge-thrown from the start if that item has a use of its own and isn't a block, food or something held or drawn (IceCaves' ice ball). The not_throwable tag and throwableBlacklist still win; the finds aren't saved, the scan runs again each start.")
                     .define("scanThrowableProjectiles", true);
+            scanItemUses = b.comment("At every world start, also read the right-click code of every modded item (the class files, as data: nothing is loaded or run) and charge-throw the ones whose code makes a projectile, when the item is a thing thrown and not a thing that shoots: it stacks, has no durability, is not food and is not held or drawn.",
+                            "This finds what no entity type names: block items that are thrown (glowsticks), many items sharing one projectile type (pebbles), projectiles that are arrows underneath (MCreator's thrown rocks). Part of the start-up scan: off with scanThrowableProjectiles. The not_throwable tag and throwableBlacklist still win.")
+                    .define("scanItemUses", true);
             tridents = b.comment("Take over tridents too: the charge bar, its power, focus and strain apply to a trident throw.",
                             "Off, a trident is vanilla's alone - its own draw, throw, Loyalty and Riptide - whatever the tags and lists say.")
                     .define("tridents", false);

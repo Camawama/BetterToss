@@ -26,8 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Which items the charge system takes over. Five layers, so other mods' throwables work without
  * anyone having to know about this mod: the item tags, the config lists, (by default) anything
  * that extends a vanilla throwable item class, (by default) every item some thrown-item projectile
- * of the pack shows, found at world start before anyone throws one ({@code server.ThrowableScan}:
- * IceCaves' ice ball), and (by default) any item the server has seen throw itself the way vanilla
+ * of the pack shows and every stackable item whose own right-click code makes a projectile, found at
+ * world start before anyone throws one ({@code server.ThrowableScan}: IceCaves' ice ball, Spelunkery's
+ * pebbles and glowsticks, the rocks of Spelunker's Charm), and (by default) any item the server has seen throw itself the way vanilla
  * throws a snowball ({@code server.ThrowableLearner}: a plain item, such as Cardiac's life bottle,
  * whose own use() throws a projectile showing that same item).
  */

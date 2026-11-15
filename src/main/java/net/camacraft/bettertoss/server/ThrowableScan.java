@@ -13,6 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -22,6 +23,7 @@ import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,6 +49,14 @@ import java.util.Set;
  * use of its own, or is food). The {@code not_throwable} tag and {@code throwableBlacklist} still win,
  * items the tags, lists or vanilla classes already cover are left as they are, and the finds aren't saved:
  * the scan runs again at every start ({@code scanThrowableProjectiles}).</p>
+ *
+ * <p>Some thrown items no entity type names: a block item that is thrown instead of placed (Spelunkery's
+ * glowsticks), many items sharing one projectile type (its pebbles: the type shows only one of them), a projectile
+ * that is an arrow underneath (the rocks of Spelunker's Charm, as every MCreator "ranged item"). So a second pass
+ * ({@code scanItemUses}) reads the right-click code of every item whose class is not the game's own
+ * ({@link UseAnalysis}: the class files as data, nothing loaded or run) and takes the item when that code makes a
+ * projectile and the item is a thing thrown, not a thing that shoots: it stacks, has no durability, is not food and
+ * is not held or drawn. A projectile that is a firework rocket is a boost, not a throw.</p>
  */
 public final class ThrowableScan
 {
@@ -124,13 +134,126 @@ public final class ThrowableScan
                 rejected.add(id + " (" + why + ")");
             }
         }
+        int byType = finds.size();
+        double typesMs = (System.nanoTime() - start) / 1.0e6;
+        String uses = scanUses(finds);
         found = Collections.unmodifiableList(new ArrayList<>(finds));
-        summary = String.format("%d misc entity types looked at, %d thrown-item projectiles, %d items found: %s;"
-                        + " %d known already: %s; %d not thrown by hand: %s; %d types failed to construct; %.1f ms",
-                types, projectiles, finds.size(), foundIds(), known.size(), known, rejected.size(), rejected, failed,
-                (System.nanoTime() - start) / 1.0e6);
+        summary = String.format("%d misc entity types looked at, %d thrown-item projectiles, %d items found by them;"
+                        + " %d known already: %s; %d not thrown by hand: %s; %d types failed to construct; %.1f ms. %s"
+                        + " Found in all: %s",
+                types, projectiles, byType, known.size(), known, rejected.size(), rejected, failed, typesMs, uses, foundIds());
         BetterTossMod.LOGGER.info("Better Toss: {}", summary);
         return found;
+    }
+
+    private static final String FIREWORK = "net/minecraft/world/entity/projectile/FireworkRocketEntity";
+
+    /**
+     * The second pass (see the class notes): adds to {@code finds} every item whose own right-click code makes a
+     * projectile and that is a thing thrown by hand. Answers one line on what it did. Never throws.
+     */
+    private static String scanUses(Set<Item> finds)
+    {
+        if (!BTConfig.SERVER.scanItemUses.get()) return "Item uses not read (scanItemUses off).";
+        long start = System.nanoTime();
+        int classes = 0, throwing = 0, added = 0;
+        List<String> rejected = new ArrayList<>();
+        try {
+            UseAnalysis analysis = new UseAnalysis(classFiles(), ThrowableScan::gameProjectile);
+            Set<Class<?>> seen = new java.util.HashSet<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                Class<?> cls = item.getClass();
+                String name = cls.getName().replace('.', '/');
+                if (UseAnalysis.isGameClass(name)) continue; // its use is the game's own: the class test covers those
+                UseAnalysis.Result result = analysis.analyse(name);
+                if (seen.add(cls)) {
+                    classes++;
+                    if (result != null && result.throwsSomething()) throwing++;
+                }
+                if (result == null || !result.throwsSomething() || finds.contains(item)) continue;
+                String why = analysis.isA(result.projectile(), FIREWORK) ? "its projectile is a firework rocket" : useRejection(item);
+                if (why == null) {
+                    finds.add(item);
+                    added++;
+                } else if (!why.isEmpty()) {
+                    rejected.add(BuiltInRegistries.ITEM.getKey(item) + " (" + why + ")");
+                }
+            }
+        } catch (Throwable t) {
+            BetterTossMod.LOGGER.warn("Better Toss: reading the items' right-click code stopped early", t);
+        }
+        return String.format("%d item classes' right-click code read, %d make a projectile, %d more items found;"
+                + " %d not taken: %s; %.1f ms.", classes, throwing, added, rejected.size(), rejected, (System.nanoTime() - start) / 1.0e6);
+    }
+
+    /**
+     * A class's file by its internal name, from wherever the mods' classes come from: the class loader's resources,
+     * and failing that the module of the mod layer that holds the class's package. Null where there is none.
+     */
+    private static java.util.function.Function<String, byte[]> classFiles()
+    {
+        ClassLoader loader = ThrowableScan.class.getClassLoader();
+        java.util.Map<String, Module> byPackage = new java.util.HashMap<>();
+        boolean[] indexed = {false};
+        return name -> {
+            String file = name + ".class";
+            try (InputStream in = loader.getResourceAsStream(file)) {
+                if (in != null) return in.readAllBytes();
+            } catch (Throwable t) {
+                // try the module below
+            }
+            try {
+                if (!indexed[0]) {
+                    indexed[0] = true;
+                    ModuleLayer layer = ThrowableScan.class.getModule().getLayer();
+                    if (layer != null) {
+                        for (Module module : layer.modules()) {
+                            for (String pkg : module.getPackages()) byPackage.putIfAbsent(pkg, module);
+                        }
+                    }
+                }
+                int slash = name.lastIndexOf('/');
+                Module module = slash < 0 ? null : byPackage.get(name.substring(0, slash).replace('/', '.'));
+                if (module == null) return null;
+                try (InputStream in = module.getResourceAsStream(file)) {
+                    return in == null ? null : in.readAllBytes();
+                }
+            } catch (Throwable t) {
+                return null;
+            }
+        };
+    }
+
+    /** Whether one of the game's own classes is a projectile: asked of the class itself, and only of entity classes. */
+    private static Boolean gameProjectile(String internalName)
+    {
+        if (!internalName.startsWith("net/minecraft/world/entity/")) return false;
+        try {
+            return Projectile.class.isAssignableFrom(Class.forName(internalName.replace('/', '.'), false, ThrowableScan.class.getClassLoader()));
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Why an item whose right-click code makes a projectile isn't a find: null when it is one, "" when Better Toss
+     * knows it by itself, else the reason. Unlike {@link #rejection} a block item passes: its class has a throw of
+     * its own (aimed at a block it is still placed, as the mod has it).
+     */
+    static String useRejection(Item item)
+    {
+        if (item == null || item == Items.AIR) return "air";
+        if (item instanceof TridentItem) return "a trident";
+        ItemStack stack = new ItemStack(item);
+        if (Throwables.isDenied(stack)) return "denied";
+        if (Throwables.knownByItself(stack)) return "";
+        if (stack.getMaxStackSize() <= 1) return "doesn't stack: a thing that shoots, not a thing thrown";
+        if (stack.isDamageableItem()) return "has durability";
+        if (item.isEdible()) return "food";
+        UseAnim anim = stack.getUseAnimation();
+        if (anim != UseAnim.NONE) return "drawn or held (" + anim + ")";
+        if (stack.getUseDuration() != 0) return "held for " + stack.getUseDuration() + " ticks";
+        return null;
     }
 
     /**
