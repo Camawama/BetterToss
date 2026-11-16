@@ -31,6 +31,11 @@ gets:
   anything else. Logging out drops it where you stand. Arrows, fireballs and the like are
   blacklisted by default.
 
+## Requirements
+
+- Minecraft 1.20.1 with Forge 47.4 or newer, on the server and every client.
+- [Camafy](https://www.curseforge.com/minecraft/mc-mods/camafy) 0.1.13 or newer (required: its hold mechanic and the XP-bar slot the power bar is drawn in).
+
 ## Compatibility
 
 Nothing is replaced. A charged throw runs the item's own `use()` on the server and rescales the
