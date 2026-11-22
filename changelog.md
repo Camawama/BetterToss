@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] (1.0.2)
+
+### Added
+- Projectiles that hold their own speed are charge-thrown too (2026-11-21; reported: a throwing disc could not be charged with Better Toss). Two things stood in the way. The disc is a sword-like item (one to a stack, with durability) whose right-click throws a thrown-item projectile at once; the start-up scan's second pass left it out as "a thing that shoots, not a thing thrown" (only the entity type's default item, the iron disc, was found by the first pass, and the others were learned one by one after a first, uncharged throw). And the disc entity sets its velocity back to its tier's speed on every tick, flies level for a set number of ticks and comes back to the hand, so even a charged launch was the item's own one tick later.
+  - The scan now takes a non-stacking item with durability when the projectile its own right-click code makes is a thrown-item projectile and that code takes the item from the stack: the item itself is what flies and leaves the hand, so it is a thing thrown (a disc, knife or axe that comes back), not a thing that shoots. A tool that casts a thrown-item projectile on a line and keeps it in the hand (Spelunkery's pick on a stick) takes nothing from the stack and is still left alone. All five discs are throwable before any throw.
+  - A projectile that keeps its own speed is told on its first tick (it was given one speed and holds another) and, when the charge asked for more than its own speed, is carried that much further along its heading after each tick of its own (`ProjectileDrives`; server config `driveFixedSpeedProjectiles`, on), so a charge takes it the charged distance in the flight time its mod gives it, through its own bounces, hits and return; the push stops short of a block or an entity in the extra stretch and leaves them to the projectile's own next step, so its mod's hit and bounce code runs as before. Each projectile is judged and carried only as its own level ticks, whatever other worlds are loaded, and only on a tick in which it moved itself (a `/tick freeze` or `/tick step` holds it as it holds the projectile). Clients tracking it are told the push (a new clientbound message; the network protocol is 4) and move their copy the same way. A quick click leaves such a projectile at its own speed: it can't be thrown slower than it flies.
+
+### Changed
+- A full bar throws a little less far: `maxPowerMultiplier` 1.6 -> 1.5 (a lob's range goes with the square of its speed, so about an eighth less range at a full charge; the empty bar and the Q fling are unchanged). The server config now carries a `configVersion`, and a world's file still holding the old default is moved to the new one as it loads (a value somebody changed is left alone), as the client config has done since 1.0.0.
+
 ## [Unreleased] (1.0.1)
 
 ### Added

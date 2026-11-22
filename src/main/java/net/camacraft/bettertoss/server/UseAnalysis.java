@@ -42,6 +42,10 @@ public final class UseAnalysis
     public static final String USE_DESCRIPTOR = "(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;"
             + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResultHolder;";
     public static final String PROJECTILE = "net/minecraft/world/entity/projectile/Projectile";
+    private static final String ITEM_STACK = "net/minecraft/world/item/ItemStack";
+    /** {@code ItemStack.shrink(int)} and {@code split(int)}: their production and development names. */
+    private static final Set<String> TAKES_FROM_STACK = Set.of("m_41774_(I)V", "shrink(I)V",
+            "m_41620_(I)Lnet/minecraft/world/item/ItemStack;", "split(I)Lnet/minecraft/world/item/ItemStack;");
     static final int MAX_DEPTH = 6;
     static final int MAX_METHODS = 400;
 
@@ -107,6 +111,57 @@ public final class UseAnalysis
         }
         results.put(itemClass, result);
         return result;
+    }
+
+    /**
+     * Whether the right-click of an item of class {@code itemClass} (internal name), or code of its own mod that it
+     * calls, takes from the stack in the hand ({@code ItemStack.shrink} or {@code split}): the item itself leaves the
+     * hand, as a thrown thing does, where a tool that casts something on a line and keeps it in the hand (a fishing
+     * rod, a pick on a stick) never takes from it. Same reach as {@link #analyse}.
+     */
+    public boolean takesFromStack(String itemClass)
+    {
+        for (String name = itemClass; name != null && !isGameClass(name); ) {
+            ClassNode node = node(name);
+            if (node == MISSING) return false;
+            MethodNode use = find(node, null, USE_DESCRIPTOR);
+            if (use != null) return takes(use, 0, new int[]{MAX_METHODS}, new HashSet<>());
+            name = node.superName;
+        }
+        return false;
+    }
+
+    private boolean takes(MethodNode method, int depth, int[] budget, Set<String> seen)
+    {
+        if (method.instructions == null) return false;
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof MethodInsnNode call) {
+                if (call.owner.equals(ITEM_STACK) && TAKES_FROM_STACK.contains(call.name + call.desc)) return true;
+                if (followed(call.owner) && takesIn(call.owner, call.name, call.desc, depth, budget, seen)) return true;
+            } else if (insn instanceof InvokeDynamicInsnNode dynamic && dynamic.bsmArgs != null) {
+                for (Object arg : dynamic.bsmArgs) {
+                    if (arg instanceof Handle handle && followed(handle.getOwner())
+                            && takesIn(handle.getOwner(), handle.getName(), handle.getDesc(), depth, budget, seen)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean takesIn(String owner, String name, String desc, int depth, int[] budget, Set<String> seen)
+    {
+        if (depth >= MAX_DEPTH || budget[0] <= 0 || !seen.add(owner + '.' + name + desc)) return false;
+        for (String at = owner; at != null && followed(at); ) {
+            ClassNode node = node(at);
+            if (node == MISSING) return false;
+            MethodNode method = find(node, name, desc);
+            if (method != null) {
+                budget[0]--;
+                return takes(method, depth + 1, budget, seen);
+            }
+            at = node.superName;
+        }
+        return false;
     }
 
     /** Whether the class {@code name} is {@code ancestor} or extends it (both internal names; classes only, not interfaces). */

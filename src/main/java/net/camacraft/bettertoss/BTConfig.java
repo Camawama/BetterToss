@@ -37,11 +37,18 @@ public class BTConfig
 
     /**
      * Forge keeps whatever a key held when the file was first written, so a retuned default never
-     * reaches an existing file. Camafy's migrator moves client values still sitting on an old
-     * default to the new one; a value the player changed never matches, so it is left alone.
+     * reaches an existing file. Camafy's migrator moves values still sitting on an old default to
+     * the new one (a world's server file as it loads, a player's client file); a value somebody
+     * changed never matches, so it is left alone.
      */
     public static void registerMigrations(IEventBus modBus)
     {
+        ConfigMigrator.register(modBus, SERVER_SPEC, SERVER.configVersion, Server.CURRENT_CONFIG_VERSION, from -> {
+            if (from < 1) {
+                // 1.0.2: a full bar throws a little less far (1.6 -> 1.5). A world's file still on the old default follows.
+                ConfigMigrator.move(SERVER.maxPowerMultiplier, 1.6D, 1.5D);
+            }
+        });
         ConfigMigrator.register(modBus, CLIENT_SPEC, CLIENT.configVersion, Client.CURRENT_CONFIG_VERSION, from -> {
             if (from < 1) {
                 // The hints and every shake went off by default after the first files were written.
@@ -61,6 +68,10 @@ public class BTConfig
 
     public static class Server
     {
+        /** Bumped when a shipped server default changes; registerMigrations() upgrades older files. */
+        public static final int CURRENT_CONFIG_VERSION = 1;
+        public final ForgeConfigSpec.IntValue configVersion;
+
         public final ForgeConfigSpec.BooleanValue enabled;
 
         public final ForgeConfigSpec.BooleanValue chargedThrowsEnabled;
@@ -68,6 +79,7 @@ public class BTConfig
         public final ForgeConfigSpec.DoubleValue maxPowerMultiplier;
         public final ForgeConfigSpec.IntValue throwCooldownTicks;
         public final ForgeConfigSpec.BooleanValue inheritShooterMotion;
+        public final ForgeConfigSpec.BooleanValue driveFixedSpeedProjectiles;
         public final ForgeConfigSpec.BooleanValue detectThrowableClasses;
         public final ForgeConfigSpec.BooleanValue learnThrowables;
         public final ForgeConfigSpec.BooleanValue scanThrowableProjectiles;
@@ -118,6 +130,13 @@ public class BTConfig
 
         Server(ForgeConfigSpec.Builder b)
         {
+            b.push("meta");
+            // Default 0 on purpose: a world's file written before this key existed gains it at 0, which marks it as
+            // never migrated. A fresh file migrates as a no-op and is stamped current.
+            configVersion = b.comment("Internal: which generation of shipped defaults this file has seen. Settings nobody changed follow the mod's new defaults; settings you changed are left alone. Do not edit.")
+                    .defineInRange("configVersion", 0, 0, Integer.MAX_VALUE);
+            b.pop();
+
             b.push("general");
             enabled = b.comment("Master switch. False restores vanilla throwing and dropping and disables catching.")
                     .define("enabled", true);
@@ -128,12 +147,14 @@ public class BTConfig
                     .define("chargedThrowsEnabled", true);
             minPowerMultiplier = b.comment("Velocity multiplier (relative to the vanilla throw) at an empty bar - what a quick click that never became a charge throws with.")
                     .defineInRange("minPowerMultiplier", 0.35D, 0.05D, 2.0D);
-            maxPowerMultiplier = b.comment("Velocity multiplier at a full bar.")
-                    .defineInRange("maxPowerMultiplier", 1.6D, 0.1D, 6.0D);
+            maxPowerMultiplier = b.comment("Velocity multiplier at a full bar. 1.5 throws about an eighth less far than the 1.6 of earlier versions (a lob's range goes with the square of its speed).")
+                    .defineInRange("maxPowerMultiplier", 1.5D, 0.1D, 6.0D);
             throwCooldownTicks = b.comment("Ticks after a charged throw before another charge can start. Quick clicks are never held back by it.")
                     .defineInRange("throwCooldownTicks", 4, 0, 100);
             inheritShooterMotion = b.comment("Add the thrower's own velocity to the projectile, like vanilla does.")
                     .define("inheritShooterMotion", true);
+            driveFixedSpeedProjectiles = b.comment("Some projectiles hold their own speed whatever they were launched at (a throwing disc flies level at its set speed for a set time and comes back), so a charge changed nothing for them. With this on, such a projectile is carried a little further along its heading after each tick of its own, so a charge still takes it the charged distance (and sooner), following its own bounces and return; a quick click leaves it at its own speed. Off, these projectiles are their mod's alone.")
+                    .define("driveFixedSpeedProjectiles", true);
             detectThrowableClasses = b.comment("Treat any item extending the vanilla throwable item classes (snowball, egg, ender pearl, XP bottle, splash/lingering potion; tridents only with tridents=true) as throwable - this is what makes most modded throwables work out of the box.")
                     .define("detectThrowableClasses", true);
             learnThrowables = b.comment("Learn other mods' throwables that don't extend a vanilla throwable class: an item whose own use throws a projectile showing that same item, at once and without a draw (the way vanilla throws a snowball or an XP bottle; Cardiac's life bottle is one), is charge-thrown from then on. Its first throw in a world is the item's own; learned items are saved with the world. The not_throwable tag and throwableBlacklist still win.")

@@ -48,7 +48,10 @@ start if it is plainly an item thrown by hand (not a block, not food, nothing he
 `use()` of its own) (`scanThrowableProjectiles`). The same scan then reads the right-click code of
 every modded item's class (the class files as data; nothing is loaded or run) and takes the items
 whose code makes a projectile when they are things thrown, not things that shoot: they stack, have
-no durability, are not food and are not held or drawn (`scanItemUses`). That finds what no entity
+no durability, are not food and are not held or drawn (`scanItemUses`); an item that doesn't stack
+or wears out is still taken when its projectile shows an item and its code takes it from the stack,
+so the item itself flies (Lloyd's throwing discs), while a tool that casts something on a line and
+keeps it in the hand (Spelunkery's pick on a stick) is not. That finds what no entity
 type names: block items that are thrown (Spelunkery's glowsticks; aimed at a block they are still
 placed), many items sharing one projectile type (its pebbles) and projectiles that are arrows
 underneath (the rocks of Spelunker's Charm). One the scan can't see is still learned from its
@@ -56,6 +59,11 @@ first throw and charged from then on, saved with the world (`learnThrowables`); 
 bottle is in the tag as well. Anything else can be added through the `bettertoss:throwable` item
 tag or the `throwableItems` config list, and the `bettertoss:not_throwable` tag or
 `throwableBlacklist` keep an item out.
+A projectile that holds its own speed (a throwing disc that flies level at its set speed for a set
+time and comes back) can't be rescaled, so it is carried a little further along its heading after
+each tick of its own while a charge asks for more than its own speed, through its own bounces and
+return, and clients move their copy the same way (`driveFixedSpeedProjectiles`); a quick click leaves
+it at its own speed.
 Catching works on any `Projectile` entity, with the `bettertoss:catchable` / `bettertoss:uncatchable`
 entity type tags and config lists to tune it.
 
@@ -67,7 +75,8 @@ entity type tags and config lists to tune it.
   the mod when a default is retuned.
 - `<world>/serverconfig/bettertoss-server.toml` - power range, flick caps, focus timing and
   spread, strain timing and spread (when a held charge starts to shake and how far it throws you
-  off), fling speeds, catch radius/cone/rules/blacklists, and per-feature switches.
+  off), fling speeds, catch radius/cone/rules/blacklists, and per-feature switches. Values nobody
+  changed follow the mod when a default is retuned (the file's `configVersion`).
 
 ## License
 

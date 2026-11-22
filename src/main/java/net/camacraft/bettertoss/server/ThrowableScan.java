@@ -147,6 +147,7 @@ public final class ThrowableScan
     }
 
     private static final String FIREWORK = "net/minecraft/world/entity/projectile/FireworkRocketEntity";
+    private static final String THROWN_ITEM = "net/minecraft/world/entity/projectile/ThrowableItemProjectile";
 
     /**
      * The second pass (see the class notes): adds to {@code finds} every item whose own right-click code makes a
@@ -171,7 +172,9 @@ public final class ThrowableScan
                     if (result != null && result.throwsSomething()) throwing++;
                 }
                 if (result == null || !result.throwsSomething() || finds.contains(item)) continue;
-                String why = analysis.isA(result.projectile(), FIREWORK) ? "its projectile is a firework rocket" : useRejection(item);
+                // the item itself flies (its projectile shows an item) and leaves the hand (its use takes from the stack)
+                boolean thrownItself = analysis.isA(result.projectile(), THROWN_ITEM) && analysis.takesFromStack(name);
+                String why = analysis.isA(result.projectile(), FIREWORK) ? "its projectile is a firework rocket" : useRejection(item, thrownItself);
                 if (why == null) {
                     finds.add(item);
                     added++;
@@ -239,16 +242,25 @@ public final class ThrowableScan
      * Why an item whose right-click code makes a projectile isn't a find: null when it is one, "" when Better Toss
      * knows it by itself, else the reason. Unlike {@link #rejection} a block item passes: its class has a throw of
      * its own (aimed at a block it is still placed, as the mod has it).
+     *
+     * <p>A thing that shoots (a wand, a cannon, a slingshot) is told from a thing thrown by its stack: it doesn't
+     * stack, or wears out. But when the projectile the code makes is a thrown-item projectile and the code takes the
+     * item from the stack, the item itself is what flies, however it stacks: a throwing disc, knife or axe with
+     * durability that comes back to the hand is a thing thrown ({@code thrownItemProjectile}), so those two tests are
+     * skipped for it. A tool that casts a thrown-item projectile on a line and keeps it in the hand (Spelunkery's pick
+     * on a stick) takes nothing from the stack and stays a thing that shoots.</p>
      */
-    static String useRejection(Item item)
+    static String useRejection(Item item, boolean thrownItemProjectile)
     {
         if (item == null || item == Items.AIR) return "air";
         if (item instanceof TridentItem) return "a trident";
         ItemStack stack = new ItemStack(item);
         if (Throwables.isDenied(stack)) return "denied";
         if (Throwables.knownByItself(stack)) return "";
-        if (stack.getMaxStackSize() <= 1) return "doesn't stack: a thing that shoots, not a thing thrown";
-        if (stack.isDamageableItem()) return "has durability";
+        if (!thrownItemProjectile) {
+            if (stack.getMaxStackSize() <= 1) return "doesn't stack: a thing that shoots, not a thing thrown";
+            if (stack.isDamageableItem()) return "has durability";
+        }
         if (item.isEdible()) return "food";
         UseAnim anim = stack.getUseAnimation();
         if (anim != UseAnim.NONE) return "drawn or held (" + anim + ")";

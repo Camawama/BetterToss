@@ -2,6 +2,7 @@ package net.camacraft.bettertoss.server;
 
 import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.HoldLockEvents;
+import net.camacraft.bettertoss.ProjectileDrives;
 import net.camacraft.bettertoss.ThrowMath;
 import net.camacraft.bettertoss.ThrowMode;
 import net.camacraft.bettertoss.Throwables;
@@ -353,5 +354,7 @@ public final class ServerThrowManager
         if (pending.inheritMotion()) {
             projectile.setDeltaMovement(projectile.getDeltaMovement().add(shooterAdj));
         }
+        // A projectile that drives itself at its own speed is carried further along instead (judged on its first tick).
+        ProjectileDrives.watch(projectile, base, speed);
     }
 }

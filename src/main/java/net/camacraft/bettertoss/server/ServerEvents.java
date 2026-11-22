@@ -3,6 +3,7 @@ package net.camacraft.bettertoss.server;
 import net.camacraft.bettertoss.BTConfig;
 import net.camacraft.bettertoss.BetterTossMod;
 import net.camacraft.bettertoss.HoldLockEvents;
+import net.camacraft.bettertoss.ProjectileDrives;
 import net.camacraft.bettertoss.Throwables;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -73,6 +74,13 @@ public final class ServerEvents
         }
     }
 
+    /** After a level's entities ticked, on either side: the projectiles that hold their own speed are carried further. */
+    @SubscribeEvent
+    public static void onLevelTick(TickEvent.LevelTickEvent event)
+    {
+        if (event.phase == TickEvent.Phase.END) ProjectileDrives.onLevelTick(event.level);
+    }
+
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event)
     {
@@ -118,6 +126,7 @@ public final class ServerEvents
     public static void onServerStopped(ServerStoppedEvent event)
     {
         ServerThrowManager.onServerStopped();
+        ProjectileDrives.onServerStopped();
         CatchManager.onServerStopped();
         ThrowableLearner.onServerStopped();
     }

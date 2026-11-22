@@ -1,5 +1,6 @@
 package net.camacraft.bettertoss.client;
 
+import net.camacraft.bettertoss.ProjectileDrives;
 import net.camacraft.bettertoss.network.ChargeSyncMessage;
 import net.camacraft.bettertoss.Throwables;
 import net.minecraft.client.Minecraft;
@@ -36,6 +37,13 @@ public final class ClientPacketHandlers
             if (BuiltInRegistries.ITEM.containsKey(id)) items.add(BuiltInRegistries.ITEM.get(id));
         }
         Throwables.setLearned(items);
+    }
+
+    /** The server's push for a projectile that holds its own speed, tied to the level this client is in. */
+    public static void onDriveSync(int entityId, double push)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        ProjectileDrives.clientSet(mc.level == null ? null : mc.level.dimension(), entityId, push);
     }
 
     public static void onCaughtSync(int entityId, boolean holding, ItemStack display)

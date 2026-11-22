@@ -198,6 +198,7 @@ public final class ClientEvents
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event)
     {
+        net.camacraft.bettertoss.ProjectileDrives.onClientLeft();
         ClientThrowing.reset();
         ClientCatchState.clear();
         // A remote server's learned throwables belong to it (singleplayer's server clears its own on stop).
